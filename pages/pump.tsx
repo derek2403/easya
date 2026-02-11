@@ -33,13 +33,33 @@ interface CoinData extends Curve {
   progress: number;
 }
 
+// Default wallet — same deterministic address as the Telegram bot portfolio
+const DEFAULT_WALLET_ADDRESS = '0x2345a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d33690';
+
+interface LaunchedStartup {
+  id: string;
+  name: string;
+  symbol: string;
+  logo: string;
+  description: string;
+  creatorAddress: string;
+  initialPurchase: number;
+  lastPriceUsd: string;
+  totalVolumeEth: string;
+  tradeCount: string;
+  createdAt: number;
+}
+
 export default function Pump() {
   const [coins, setCoins] = useState<CoinData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'newest' | 'marketCap'>('marketCap');
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [launchedStartups, setLaunchedStartups] = useState<CoinData[]>([]);
 
   useEffect(() => {
     fetchCoins();
+    fetchLaunchedStartups();
   }, []);
 
   const fetchCoins = async () => {
@@ -116,6 +136,38 @@ export default function Pump() {
     }
   };
 
+  const fetchLaunchedStartups = async () => {
+    try {
+      const res = await fetch('/api/launch');
+      if (!res.ok) return;
+      const startups: LaunchedStartup[] = await res.json();
+      const asCoinData: CoinData[] = startups.map((s) => ({
+        id: s.id,
+        createdAt: String(Math.floor(s.createdAt / 1000)),
+        token: s.id,
+        name: s.name,
+        symbol: s.symbol,
+        uri: '',
+        creator: s.creatorAddress || DEFAULT_WALLET_ADDRESS,
+        graduated: false,
+        lastPriceUsd: s.lastPriceUsd,
+        lastPriceEth: '0',
+        totalVolumeEth: s.totalVolumeEth,
+        tradeCount: s.tradeCount,
+        lastTradeAt: String(Math.floor(s.createdAt / 1000)),
+        marketCap: parseFloat(s.lastPriceUsd) * 1000000 || 100,
+        priceChange: 0,
+        description: s.description || 'Newly launched startup',
+        image: s.logo || '',
+        timeAgo: getTimeAgo(String(Math.floor(s.createdAt / 1000))),
+        progress: Math.random() * 15,
+      }));
+      setLaunchedStartups(asCoinData);
+    } catch (err) {
+      console.error('Error fetching launched startups:', err);
+    }
+  };
+
   const convertIpfsToHttp = (ipfsUrl: string): string => {
     if (!ipfsUrl) return '';
     if (ipfsUrl.startsWith('ipfs://')) {
@@ -165,12 +217,14 @@ export default function Pump() {
     return 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-400';
   };
 
-  const sortedCoins = [...coins].sort((a, b) => {
-    if (activeTab === 'marketCap') {
-      return b.marketCap - a.marketCap;
-    }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  const sortedCoins = (() => {
+    const subgraphCoins = [...coins].sort((a, b) => {
+      if (activeTab === 'marketCap') return b.marketCap - a.marketCap;
+      return parseInt(b.createdAt) - parseInt(a.createdAt);
+    });
+    // Launched startups always appear at the top
+    return [...launchedStartups, ...subgraphCoins];
+  })();
 
   return (
     <>
@@ -197,14 +251,26 @@ export default function Pump() {
               </nav>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <button className="text-sm font-bold text-foreground hover:text-primary transition-colors flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-muted/50">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path>
-                  <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path>
-                </svg>
-                Log in
-              </button>
-              <a className="bg-primary text-primary-foreground px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors flex items-center gap-1.5 sm:gap-2" href="/create">
+              {walletConnected ? (
+                <button className="text-sm font-bold text-foreground flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-muted/50 border border-border">
+                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                  <span className="font-mono text-xs sm:text-sm">
+                    {DEFAULT_WALLET_ADDRESS.slice(0, 6)}...{DEFAULT_WALLET_ADDRESS.slice(-4)}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setWalletConnected(true)}
+                  className="text-sm font-bold text-foreground hover:text-primary transition-colors flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-muted/50"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path>
+                    <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path>
+                  </svg>
+                  Log in
+                </button>
+              )}
+              <a className="bg-primary text-primary-foreground px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors flex items-center gap-1.5 sm:gap-2" href="/launch">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                   <path d="M5 12h14"></path>
                   <path d="M12 5v14"></path>
@@ -238,21 +304,19 @@ export default function Pump() {
                 <div className="inline-flex gap-1 p-1 bg-muted rounded-xl">
                   <button
                     onClick={() => setActiveTab('newest')}
-                    className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-                      activeTab === 'newest'
+                    className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all ${activeTab === 'newest'
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                      }`}
                   >
                     Newest
                   </button>
                   <button
                     onClick={() => setActiveTab('marketCap')}
-                    className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-                      activeTab === 'marketCap'
+                    className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all ${activeTab === 'marketCap'
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                      }`}
                   >
                     Market Cap
                   </button>
@@ -262,7 +326,7 @@ export default function Pump() {
               {/* Loading State */}
               {loading && (
                 <div className="flex items-center justify-center py-20">
-                  <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"/>
+                  <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
 
@@ -327,9 +391,8 @@ export default function Pump() {
                               </div>
                             </div>
                             <span className="inline-flex">
-                              <span className={`text-xs sm:text-sm font-semibold shrink-0 whitespace-nowrap ${
-                                coin.priceChange >= 0 ? 'text-primary' : 'text-red-500'
-                              }`}>
+                              <span className={`text-xs sm:text-sm font-semibold shrink-0 whitespace-nowrap ${coin.priceChange >= 0 ? 'text-primary' : 'text-red-500'
+                                }`}>
                                 {coin.priceChange >= 0 ? '↑' : '↓'} {Math.abs(coin.priceChange).toFixed(2)}%
                               </span>
                             </span>

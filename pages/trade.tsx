@@ -18,6 +18,17 @@ declare global {
         ready: () => void;
         sendData: (data: string) => void;
         close: () => void;
+        initDataUnsafe: {
+          user?: {
+            id: number;
+            first_name: string;
+            last_name?: string;
+            username?: string;
+          };
+        };
+        HapticFeedback: {
+          impactOccurred: (style: string) => void;
+        };
         MainButton: {
           text: string;
           show: () => void;
@@ -49,15 +60,63 @@ export default function TradePage() {
     stopLoss: "",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState("");
+
+  const getUserId = (): number => {
+    if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+      return window.Telegram.WebApp.initDataUnsafe.user.id;
+    }
+    return 12345;
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
       window.Telegram.WebApp.ready();
     }
+    // Fetch balance
+    fetch(`/api/portfolio?userId=${getUserId()}`)
+      .then((r) => r.json())
+      .then((data) => setBalance(data.usdcBalance))
+      .catch(() => {});
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBalanceError("");
+
+    const tradeAmount = parseFloat(trade.amount);
+    if (trade.side === "buy" && balance !== null && tradeAmount > balance) {
+      setBalanceError(`Insufficient balance. Available: $${balance.toFixed(2)}`);
+      return;
+    }
+
+    // Update portfolio
+    try {
+      const res = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: getUserId(),
+          type: "trade",
+          symbol: trade.pair.split("/")[0],
+          curveId: trade.pair,
+          name: trade.pair.split("/")[0],
+          side: trade.side,
+          amount: trade.amount,
+          price: trade.entry,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setBalanceError(err.error || "Trade failed");
+        return;
+      }
+      const updated = await res.json();
+      setBalance(updated.usdcBalance);
+    } catch {
+      // continue anyway for demo
+    }
 
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
       window.Telegram.WebApp.sendData(JSON.stringify(trade));
@@ -90,6 +149,18 @@ export default function TradePage() {
         ) : (
           <form onSubmit={handleSubmit} style={styles.form}>
             <h2 style={styles.title}>New Trade</h2>
+
+            {balance !== null && (
+              <div style={{ textAlign: "center", fontSize: 13, color: "#888", marginBottom: 8 }}>
+                Available: <span style={{ color: "#0ecb81", fontWeight: 600, fontFamily: "monospace" }}>${balance.toFixed(2)}</span>
+              </div>
+            )}
+
+            {balanceError && (
+              <div style={{ background: "#f6465d22", border: "1px solid #f6465d44", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#f6465d", textAlign: "center" }}>
+                {balanceError}
+              </div>
+            )}
 
             {/* Pair selector */}
             <label style={styles.label}>Pair</label>

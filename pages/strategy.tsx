@@ -42,11 +42,25 @@ export default function StrategyPage() {
   const [loading, setLoading] = useState(true);
   const [depositAmount, setDepositAmount] = useState("");
   const [invested, setInvested] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState("");
+
+  const getUserId = (): number => {
+    if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+      return window.Telegram.WebApp.initDataUnsafe.user.id;
+    }
+    return 12345;
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
       window.Telegram.WebApp.ready();
     }
+    // Fetch balance
+    fetch(`/api/portfolio?userId=${getUserId()}`)
+      .then((r) => r.json())
+      .then((data) => setBalance(data.usdcBalance))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -69,8 +83,44 @@ export default function StrategyPage() {
 
   const color = TIER_COLORS[tier] || "#f0b90b";
 
-  const handleInvest = () => {
+  const handleInvest = async () => {
     if (!depositAmount || !data) return;
+    setBalanceError("");
+
+    const investAmount = parseFloat(depositAmount);
+    if (balance !== null && investAmount > balance) {
+      setBalanceError(`Insufficient balance. Available: $${balance.toFixed(2)}`);
+      return;
+    }
+
+    // Execute portfolio trades for each allocation
+    try {
+      for (const alloc of data.allocations) {
+        const allocAmount = (investAmount * alloc.weight) / 100;
+        if (allocAmount <= 0) continue;
+        await fetch("/api/portfolio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: getUserId(),
+            type: "strategy",
+            symbol: alloc.symbol,
+            curveId: alloc.symbol,
+            name: alloc.name,
+            side: "buy",
+            amount: allocAmount.toString(),
+            price: alloc.priceUsd,
+          }),
+        });
+      }
+      // Refresh balance
+      const res = await fetch(`/api/portfolio?userId=${getUserId()}`);
+      const updated = await res.json();
+      setBalance(updated.usdcBalance);
+    } catch {
+      // continue for demo
+    }
+
     setInvested(true);
 
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
@@ -338,6 +388,16 @@ export default function StrategyPage() {
                 >
                   Deposit
                 </h3>
+                {balance !== null && (
+                  <div style={{ fontSize: 13, color: "#888", marginBottom: 10 }}>
+                    Available: <span style={{ color: "#0ecb81", fontWeight: 600, fontFamily: "monospace" }}>${balance.toFixed(2)}</span>
+                  </div>
+                )}
+                {balanceError && (
+                  <div style={{ background: "#f6465d22", border: "1px solid #f6465d44", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#f6465d", textAlign: "center", marginBottom: 10 }}>
+                    {balanceError}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
                     type="text"

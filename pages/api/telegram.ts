@@ -17,27 +17,54 @@ bot.start((ctx) => {
       `\n` +
       `<b>What I can do:</b>\n` +
       `\n` +
+      `/profile   — View wallet & portfolio\n` +
       `/tokens    — Browse tokens with AI risk scores\n` +
       `/trade     — Submit a market trade\n` +
       `/limit     — Set a limit order\n` +
       `/strategy  — Auto-invest with risk-tiered portfolios\n` +
       `\n` +
-      `Tap <b>Menu</b> below to open the app anytime.`,
+      `Tap <b>Open App</b> below to view your profile.`,
     {
       reply_markup: {
         inline_keyboard: [
           [
+            {
+              text: "👤 Profile",
+              web_app: { url: `${appUrl}/profile` },
+            },
             { text: "📊 Tokens", callback_data: "tokens_0" },
-            { text: "📈 Trade", web_app: { url: `${appUrl}/trade` } },
           ],
           [
+            { text: "📈 Trade", web_app: { url: `${appUrl}/trade` } },
             {
               text: "⏳ Limit Order",
               web_app: { url: `${appUrl}/limit-order` },
             },
+          ],
+          [
             {
               text: "💼 Strategy",
               callback_data: "strategy_menu",
+            },
+          ],
+        ],
+      },
+    }
+  );
+});
+
+// ── /profile ─────────────────────────────────────────────
+bot.command("profile", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  ctx.replyWithHTML(
+    `<b>Your Profile</b>\n\nView your wallet, balance, and portfolio.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "Open Profile",
+              web_app: { url: `${appUrl}/profile` },
             },
           ],
         ],
@@ -234,19 +261,40 @@ bot.on("web_app_data", (ctx) => {
   try {
     const data = JSON.parse(ctx.message.web_app_data.data);
 
-    // Limit order submission
+    // Limit order submission (multi-level)
     if (data.type === "limit_order") {
-      const sideEmoji = data.side === "buy" ? "🟢" : "🔴";
-      ctx.replyWithHTML(
-        `<b>⏳ Limit Order Placed</b>\n` +
-          `\n` +
-          `${sideEmoji} <b>${data.side.toUpperCase()}</b> ${data.symbol}\n` +
-          `\n` +
-          `<code>Trigger    $${data.triggerPrice}</code>\n` +
-          `<code>Amount     ${data.amount} USDT</code>\n` +
-          `\n` +
-          `<i>Order will execute when price reaches trigger.</i>`
-      );
+      if (data.levels) {
+        const typeEmoji: Record<string, string> = { entry: "🔵", tp: "🟢", sl: "🔴" };
+        const typeLabel: Record<string, string> = { entry: "Entry", tp: "Take Profit", sl: "Stop Loss" };
+        const levelLines = data.levels
+          .map((l: { type: string; price: string; amount: string }) =>
+            `${typeEmoji[l.type] || "⚪"} <b>${typeLabel[l.type] || l.type}</b>  ${l.price}  —  $${l.amount}`
+          )
+          .join("\n");
+        ctx.replyWithHTML(
+          `<b>⏳ Limit Orders Placed</b>\n` +
+            `\n` +
+            `<b>${data.symbol}</b>  ·  ${data.levels.length} levels\n` +
+            `\n` +
+            `${levelLines}\n` +
+            `\n` +
+            `<code>Total      $${data.totalAmount} USDT</code>\n` +
+            `\n` +
+            `<i>Orders execute when price reaches each level.</i>`
+        );
+      } else {
+        const sideEmoji = data.side === "buy" ? "🟢" : "🔴";
+        ctx.replyWithHTML(
+          `<b>⏳ Limit Order Placed</b>\n` +
+            `\n` +
+            `${sideEmoji} <b>${data.side.toUpperCase()}</b> ${data.symbol}\n` +
+            `\n` +
+            `<code>Trigger    $${data.triggerPrice}</code>\n` +
+            `<code>Amount     ${data.amount} USDT</code>\n` +
+            `\n` +
+            `<i>Order will execute when price reaches trigger.</i>`
+        );
+      }
       return;
     }
 

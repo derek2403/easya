@@ -51,6 +51,7 @@ async function main() {
   const cmds = await api("setMyCommands", {
     commands: [
       { command: "start", description: "Welcome & help" },
+      { command: "profile", description: "Wallet & portfolio" },
       { command: "tokens", description: "Browse tokens with AI risk scores" },
       { command: "trade", description: "Submit a market trade" },
       { command: "limit", description: "Set a limit order" },
@@ -82,7 +83,7 @@ async function main() {
     menu_button: {
       type: "web_app",
       text: "Open App",
-      web_app: { url: `${APP_URL}/trade` },
+      web_app: { url: `${APP_URL}/profile` },
     },
   });
   console.log(menu.ok ? "  Menu button set" : "  Menu button failed", menu);

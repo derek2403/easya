@@ -8,6 +8,7 @@ export interface LimitOrder {
   triggerPrice: string;
   amount: string;
   currentPrice: string;
+  orderType: "entry" | "tp" | "sl";
   status: "pending" | "filled" | "cancelled";
   createdAt: number;
 }
@@ -17,7 +18,7 @@ const orders: Map<string, LimitOrder> = new Map();
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "POST") {
-    const { symbol, curveId, side, triggerPrice, amount, currentPrice } =
+    const { symbol, curveId, side, triggerPrice, amount, currentPrice, orderType } =
       req.body;
 
     if (!symbol || !curveId || !side || !triggerPrice || !amount) {
@@ -33,6 +34,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       triggerPrice,
       amount,
       currentPrice: currentPrice || "0",
+      orderType: orderType || "entry",
       status: "pending",
       createdAt: Date.now(),
     };

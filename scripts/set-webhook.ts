@@ -65,13 +65,19 @@ async function main() {
   console.log("Setting description...");
   const desc = await api("setMyDescription", {
     description:
-      "Your AI-powered crypto trading assistant. Analyze tokens with risk scores, set limit orders, and auto-invest with strategy portfolios — all from Telegram.",
+      "Your AI-powered crypto trading assistant on Robin Pump.\n\n" +
+      "📊 Token Scanner — AI risk scores for every token\n" +
+      "📈 Trade & Limit Orders — set entry, TP & SL levels\n" +
+      "💼 Strategy Portfolios — auto-invest across risk tiers\n" +
+      "🚀 Launch — create your own startup token\n" +
+      "👤 Portfolio — track holdings, PnL & activity\n\n" +
+      "Tap Start to begin.",
   });
   console.log(desc.ok ? "  Description set" : "  Description failed", desc);
 
   // 4. Set short description (shown in chat list / sharing)
   const sdesc = await api("setMyShortDescription", {
-    short_description: "AI crypto token analyzer & trading bot",
+    short_description: "AI-powered crypto trading on Base — analyze, trade & launch tokens",
   });
   console.log(
     sdesc.ok ? "  Short description set" : "  Short description failed",

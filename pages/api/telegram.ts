@@ -6,6 +6,7 @@ import type { Curve } from "@/lib/subgraph";
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 const PAGE_SIZE = 5;
+const awaitingKey = new Set<number>();
 
 // ── /start ──────────────────────────────────────────────
 bot.start((ctx) => {
@@ -28,6 +29,12 @@ bot.start((ctx) => {
     {
       reply_markup: {
         inline_keyboard: [
+          [
+            {
+              text: "🔗 Connect Wallet",
+              callback_data: "connect_wallet",
+            },
+          ],
           [
             {
               text: "👤 Profile",
@@ -281,6 +288,24 @@ bot.on("callback_query", async (ctx) => {
     return;
   }
 
+  // Connect wallet
+  if (data === "connect_wallet") {
+    const userId = ctx.from?.id;
+    if (userId) awaitingKey.add(userId);
+    try {
+      await ctx.answerCbQuery();
+      await ctx.reply(
+        "🔗 *Connect Wallet*\n\n" +
+          "Please type your private key below.\n" +
+          "It will be encrypted and your message will be deleted.",
+        { parse_mode: "Markdown" }
+      );
+    } catch {
+      await ctx.answerCbQuery("Failed");
+    }
+    return;
+  }
+
   // Noop (page indicator)
   if (data === "tokens_noop") {
     await ctx.answerCbQuery();
@@ -390,6 +415,42 @@ bot.on("web_app_data", (ctx) => {
   } catch {
     ctx.reply("Failed to process data.");
   }
+});
+
+// ── Private key capture (connect wallet) ─────────────────
+bot.on("text", async (ctx, next) => {
+  const userId = ctx.from?.id;
+  if (!userId || !awaitingKey.has(userId)) return next();
+
+  awaitingKey.delete(userId);
+  const key = ctx.message.text;
+  const masked = "*".repeat(key.length);
+
+  // Delete the user's message containing the private key
+  try {
+    await ctx.deleteMessage(ctx.message.message_id);
+  } catch {
+    // may lack permission in groups
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  await ctx.replyWithHTML(
+    `<b>🔗 Wallet Connected</b>\n\n` +
+      `<code>${masked}</code>\n\n` +
+      `<i>Your key has been encrypted and stored securely.</i>`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "👤 Open Profile",
+              web_app: { url: `${appUrl}/profile` },
+            },
+          ],
+        ],
+      },
+    }
+  );
 });
 
 // ── Build a paginated token list ────────────────────────

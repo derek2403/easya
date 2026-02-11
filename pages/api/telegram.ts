@@ -36,16 +36,15 @@ bot.start((ctx) => {
             { text: "📊 Tokens", callback_data: "tokens_0" },
           ],
           [
-            { text: "📈 Trade", web_app: { url: `${appUrl}/trade` } },
             {
-              text: "⏳ Limit Order",
+              text: "📈 Trade",
               web_app: { url: `${appUrl}/limit-order` },
             },
           ],
           [
             {
               text: "💼 Strategy",
-              callback_data: "strategy_menu",
+              web_app: { url: `${appUrl}/strategy` },
             },
             {
               text: "🚀 Launch",
@@ -122,23 +121,18 @@ bot.command("limit", (ctx) => {
 
 // ── /strategy ───────────────────────────────────────────
 bot.command("strategy", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   ctx.replyWithHTML(
-    `<b>Strategy Portfolios</b>\n\n` +
-      `Deposit USDC and auto-invest across top bonding curve tokens.\n` +
-      `Choose a risk tier that matches your style:\n\n` +
-      `🛡️ <b>Conservative</b> — 8-12% APR · Low risk\n` +
-      `⚖️ <b>Balanced</b> — 15-25% APR · Medium risk\n` +
-      `🚀 <b>Aggressive</b> — 30-60% APR · High risk`,
+    `<b>💼 Strategy Portfolios</b>\n\n` +
+      `Auto-invest across top bonding curve tokens with risk-tiered portfolios.`,
     {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: "🛡️ Conservative",
-              callback_data: "strat_conservative",
+              text: "Open Strategy",
+              web_app: { url: `${appUrl}/strategy` },
             },
-            { text: "⚖️ Balanced", callback_data: "strat_balanced" },
-            { text: "🚀 Aggressive", callback_data: "strat_aggressive" },
           ],
         ],
       },

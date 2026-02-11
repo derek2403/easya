@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import Script from "next/script";
+import Image from "next/image";
 
 interface RiskFactor {
   name: string;
@@ -24,6 +25,9 @@ interface AnalysisData {
     totalVolumeEth: string;
     tradeCount: string;
     lastTradeAt: string | null;
+    uri: string;
+    image: string;
+    description: string;
   };
   risk: {
     score: number;
@@ -75,10 +79,28 @@ export default function AnalyzePage() {
   }, [id]);
 
   const formatAge = useCallback((createdAt: string) => {
-    const hours = (Date.now() / 1000 - parseInt(createdAt)) / 3600;
-    if (hours < 1) return `${Math.round(hours * 60)}m`;
-    if (hours < 24) return `${Math.round(hours)}h`;
-    return `${Math.round(hours / 24)}d`;
+    const now = Date.now();
+    const created = parseInt(createdAt) * 1000;
+    const diff = Math.floor((now - created) / 1000);
+
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }, []);
+
+  const formatNumber = useCallback((num: string | number): string => {
+    const n = typeof num === "string" ? parseFloat(num) : num;
+    if (isNaN(n)) return "0";
+    if (n === 0) return "0";
+
+    if (n < 0.000001) {
+      const str = n.toFixed(20);
+      return str.replace(/\.?0+$/, "");
+    }
+
+    if (n < 1) return n.toFixed(10).replace(/\.?0+$/, "");
+    return n.toFixed(8).replace(/\.?0+$/, "");
   }, []);
 
   const color = data ? RISK_COLORS[data.risk.level] : "#888";
@@ -151,152 +173,170 @@ export default function AnalyzePage() {
         {/* Content */}
         {data && (
           <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 16px 32px" }}>
-            {/* ── Header ── */}
+            {/* ── Header with Risk Score ── */}
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 20,
-              }}
-            >
-              {/* Icon circle */}
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  background: `linear-gradient(135deg, ${color}33, ${color}11)`,
-                  border: `1px solid ${color}44`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color,
-                  flexShrink: 0,
-                }}
-              >
-                {data.curve.symbol.slice(0, 2)}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h1
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 700,
-                    margin: 0,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {data.curve.name}
-                </h1>
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "#888",
-                    margin: "2px 0 0",
-                  }}
-                >
-                  ${data.curve.symbol}
-                  {data.curve.graduated && (
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        color: "#0ecb81",
-                        fontSize: 11,
-                      }}
-                    >
-                      GRADUATED
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* ── Risk Score Card ── */}
-            <div
-              style={{
-                background: `linear-gradient(135deg, ${color}11, ${color}05)`,
-                border: `1px solid ${color}33`,
+                background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
                 borderRadius: 16,
-                padding: "20px 20px 16px",
+                padding: "12px",
                 marginBottom: 12,
               }}
             >
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
+                  gap: 12,
+                  alignItems: "stretch",
                 }}
               >
-                <div>
-                  <p
+                {/* Token Image */}
+                <div
+                  style={{
+                    width: 95,
+                    height: 95,
+                    borderRadius: 14,
+                    background: data.curve.image ? "#000" : `linear-gradient(135deg, ${color}33, ${color}11)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color,
+                    flexShrink: 0,
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  {data.curve.image ? (
+                    <img
+                      alt={data.curve.name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                      src={data.curve.image}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.parentElement!.innerHTML = data.curve.symbol.slice(0, 2);
+                      }}
+                    />
+                  ) : (
+                    data.curve.symbol.slice(0, 2)
+                  )}
+                </div>
+
+                {/* Token Info */}
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <div>
+                    <h1
+                      style={{
+                        fontSize: 20,
+                        fontWeight: 700,
+                        margin: 0,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {data.curve.name}
+                    </h1>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#666",
+                        marginTop: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span style={{ fontFamily: "monospace", color: "#888" }}>{data.curve.symbol}</span>
+                      <span style={{ color: "#444" }}>•</span>
+                      <span style={{ fontFamily: "monospace", color: "#888" }}>
+                        {data.curve.token.slice(0, 6)}...{data.curve.token.slice(-4)}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#666",
+                        marginTop: 3,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span>by: <span style={{ fontFamily: "monospace", color: "#888" }}>{data.curve.creator.slice(-6)}</span></span>
+                      <span style={{ color: "#444" }}>•</span>
+                      <span>{formatAge(data.curve.createdAt)}</span>
+                      {data.curve.graduated && (
+                        <>
+                          <span style={{ color: "#444" }}>•</span>
+                          <span style={{ color: "#0ecb81", fontSize: 10, fontWeight: 600 }}>GRADUATED</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {/* Price */}
+                  <div
                     style={{
-                      fontSize: 12,
-                      color: "#888",
-                      margin: 0,
+                      marginTop: "auto",
+                      paddingTop: 4,
+                      fontSize: 24,
+                      fontWeight: 700,
+                      color: "#0ecb81",
+                    }}
+                  >
+                    ${formatNumber(data.curve.lastPriceUsd)}
+                  </div>
+                </div>
+
+                {/* Risk Score - Right Side */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 90,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "#666",
                       textTransform: "uppercase",
                       letterSpacing: 1,
+                      marginBottom: 6,
                     }}
                   >
                     Risk Score
-                  </p>
-                  <p
+                  </div>
+                  <div
                     style={{
-                      fontSize: 44,
+                      fontSize: 32,
                       fontWeight: 800,
                       color,
-                      margin: "4px 0 0",
                       lineHeight: 1,
+                      marginBottom: 10,
                     }}
                   >
-                    {data.risk.score}
-                    <span
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 400,
-                        color: "#666",
-                      }}
-                    >
-                      /100
-                    </span>
-                  </p>
+                    {data.risk.score}<span style={{ fontSize: 16, color: "#666", fontWeight: 400 }}>/100</span>
+                  </div>
+                  <div
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: 12,
+                      background: `${color}22`,
+                      color,
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {data.risk.level.toUpperCase()}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    padding: "6px 16px",
-                    borderRadius: 20,
-                    background: `${color}22`,
-                    color,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  {data.risk.level.toUpperCase()}
-                </div>
-              </div>
-
-              {/* Bar */}
-              <div
-                style={{
-                  height: 6,
-                  background: "#ffffff12",
-                  borderRadius: 3,
-                  marginTop: 16,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${data.risk.score}%`,
-                    background: `linear-gradient(90deg, ${color}, ${color}aa)`,
-                    borderRadius: 3,
-                    transition: "width 0.6s ease",
-                  }}
-                />
               </div>
             </div>
 
@@ -304,24 +344,19 @@ export default function AnalyzePage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
+                gridTemplateColumns: "1fr 1fr",
                 gap: 8,
                 marginBottom: 12,
               }}
             >
               {[
                 {
-                  label: "Price",
-                  value: `$${parseFloat(data.curve.lastPriceUsd).toExponential(1)}`,
-                },
-                {
-                  label: "Volume",
-                  value: `${parseFloat(data.curve.totalVolumeEth).toFixed(3)} E`,
+                  label: "Volume (24h)",
+                  value: `${parseFloat(data.curve.totalVolumeEth).toFixed(3)} ETH`,
                 },
                 { label: "Trades", value: data.curve.tradeCount },
-                { label: "Age", value: formatAge(data.curve.createdAt) },
                 {
-                  label: "Traders",
+                  label: "Unique Traders",
                   value: String(data.tradeSummary.uniqueTraders),
                 },
                 {
@@ -335,28 +370,12 @@ export default function AnalyzePage() {
                   style={{
                     background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
                     borderRadius: 12,
-                    padding: "12px 10px",
-                    textAlign: "center",
+                    padding: "12px",
+                    fontSize: 13,
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: 10,
-                      color: "#666",
-                      margin: 0,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.8,
-                    }}
-                  >
-                    {m.label}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      margin: "6px 0 0",
-                    }}
-                  >
+                  <span style={{ color: "#666", fontWeight: 400 }}>{m.label}: </span>
+                  <span style={{ fontWeight: 600 }}>
                     {"color" in m && m.color ? (
                       <>
                         <span style={{ color: "#0ecb81" }}>
@@ -370,7 +389,7 @@ export default function AnalyzePage() {
                     ) : (
                       m.value
                     )}
-                  </p>
+                  </span>
                 </div>
               ))}
             </div>
@@ -386,9 +405,9 @@ export default function AnalyzePage() {
             >
               <h3
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 700,
-                  margin: "0 0 12px",
+                  margin: "0 0 14px",
                   textTransform: "uppercase",
                   letterSpacing: 0.8,
                   color: "#888",
@@ -407,54 +426,53 @@ export default function AnalyzePage() {
                   <div
                     key={i}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 0",
+                      padding: "12px 0",
                       borderTop: i > 0 ? "1px solid #ffffff08" : "none",
                     }}
                   >
                     <div
                       style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        background: impactColor,
-                        flexShrink: 0,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 6,
                       }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: 3,
+                            background: impactColor,
+                            flexShrink: 0,
+                          }}
+                        />
                         <span style={{ fontSize: 14, fontWeight: 600 }}>
                           {f.name}
                         </span>
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: impactColor,
-                          }}
-                        >
-                          {f.value}
-                        </span>
                       </div>
-                      <p
+                      <span
                         style={{
-                          fontSize: 12,
-                          color: "#666",
-                          margin: "3px 0 0",
-                          lineHeight: 1.4,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: impactColor,
                         }}
                       >
-                        {f.detail}
-                      </p>
+                        {f.value}
+                      </span>
                     </div>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "#888",
+                        margin: 0,
+                        lineHeight: 1.5,
+                        paddingLeft: 14,
+                      }}
+                    >
+                      {f.detail}
+                    </p>
                   </div>
                 );
               })}
@@ -466,32 +484,54 @@ export default function AnalyzePage() {
                 background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
                 borderRadius: 16,
                 padding: "16px",
-                marginBottom: 12,
               }}
             >
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  marginBottom: 12,
+                  gap: 10,
+                  marginBottom: 14,
                 }}
               >
                 <div
                   style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 6,
-                    background:
-                      "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    width: 32,
+                    height: 32,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 12,
-                    color: "#fff",
                   }}
                 >
-                  AI
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 2L2 7L12 12L22 7L12 2Z"
+                      stroke="#000"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M2 17L12 22L22 17"
+                      stroke="#000"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M2 12L12 17L22 12"
+                      stroke="#000"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </div>
                 <h3
                   style={{
@@ -500,28 +540,63 @@ export default function AnalyzePage() {
                     margin: 0,
                     textTransform: "uppercase",
                     letterSpacing: 0.8,
-                    color: "#888",
+                    color: "#000",
                   }}
                 >
                   AI Analysis
                 </h3>
               </div>
-              <div style={{ lineHeight: 1.6, fontSize: 14, color: "#ccc" }}>
+              <div style={{ lineHeight: 1.7, fontSize: 14 }}>
                 {data.analysis.split("\n").map((line, i) => {
-                  if (!line.trim()) return <br key={i} />;
-                  // Bold lines that start with a number or "Verdict"
-                  const isBold =
-                    /^\d+\./.test(line.trim()) ||
-                    line.trim().startsWith("Verdict") ||
-                    line.trim().startsWith("**");
+                  if (!line.trim()) return null;
+
+                  const trimmedLine = line.trim();
+                  const upperLine = trimmedLine.toUpperCase();
+
+                  // Check if this is a Verdict line
+                  const isVerdictLine = trimmedLine.startsWith("Verdict") || /^3\.\s*Verdict/i.test(trimmedLine);
+
+                  // Bold lines that start with a number or main headings
+                  const isBold = /^\d+\./.test(trimmedLine) || trimmedLine.startsWith("**");
                   const cleaned = line.replace(/\*\*/g, "");
+
+                  // Handle verdict line specially
+                  if (isVerdictLine) {
+                    const parts = cleaned.split(":");
+                    if (parts.length >= 2) {
+                      const label = parts[0];
+                      const verdict = parts.slice(1).join(":").trim();
+                      let verdictColor = "#000";
+
+                      const upperVerdict = verdict.toUpperCase();
+                      if (upperVerdict.includes("SAFE")) {
+                        verdictColor = "#0ecb81";
+                      } else if (upperVerdict.includes("CAUTION") || upperVerdict.includes("AVOID")) {
+                        verdictColor = "#f6465d";
+                      }
+
+                      return (
+                        <p
+                          key={i}
+                          style={{
+                            margin: "6px 0",
+                            fontWeight: 700,
+                            color: "#000",
+                          }}
+                        >
+                          {label}: <span style={{ color: verdictColor }}>{verdict}</span>
+                        </p>
+                      );
+                    }
+                  }
+
                   return (
                     <p
                       key={i}
                       style={{
-                        margin: "4px 0",
-                        fontWeight: isBold ? 600 : 400,
-                        color: isBold ? "#e4e4e7" : "#aaa",
+                        margin: "6px 0",
+                        fontWeight: isBold ? 700 : 400,
+                        color: isBold ? "#000" : "#333",
                       }}
                     >
                       {cleaned}
@@ -529,61 +604,6 @@ export default function AnalyzePage() {
                   );
                 })}
               </div>
-            </div>
-
-            {/* ── Contract Info ── */}
-            <div
-              style={{
-                background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
-                borderRadius: 16,
-                padding: "14px 16px",
-                marginBottom: 20,
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 10,
-                  color: "#666",
-                  margin: "0 0 4px",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                }}
-              >
-                Contract
-              </p>
-              <p
-                style={{
-                  fontSize: 11,
-                  color: "#888",
-                  margin: 0,
-                  wordBreak: "break-all",
-                  fontFamily: "monospace",
-                }}
-              >
-                {data.curve.token}
-              </p>
-              <p
-                style={{
-                  fontSize: 10,
-                  color: "#666",
-                  margin: "10px 0 4px",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                }}
-              >
-                Creator
-              </p>
-              <p
-                style={{
-                  fontSize: 11,
-                  color: "#888",
-                  margin: 0,
-                  wordBreak: "break-all",
-                  fontFamily: "monospace",
-                }}
-              >
-                {data.curve.creator}
-              </p>
             </div>
           </div>
         )}

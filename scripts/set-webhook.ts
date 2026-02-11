@@ -51,8 +51,10 @@ async function main() {
   const cmds = await api("setMyCommands", {
     commands: [
       { command: "start", description: "Welcome & help" },
-      { command: "tokens", description: "Browse tokens with risk analysis" },
-      { command: "trade", description: "Open the trading panel" },
+      { command: "tokens", description: "Browse tokens with AI risk scores" },
+      { command: "trade", description: "Submit a market trade" },
+      { command: "limit", description: "Set a limit order" },
+      { command: "strategy", description: "Auto-invest portfolios" },
     ],
   });
   console.log(cmds.ok ? "  Commands set" : "  Commands failed", cmds);
@@ -61,7 +63,7 @@ async function main() {
   console.log("Setting description...");
   const desc = await api("setMyDescription", {
     description:
-      "Your AI-powered crypto trading assistant. Analyze bonding curve tokens, assess risk levels, and submit trades — all from Telegram.",
+      "Your AI-powered crypto trading assistant. Analyze tokens with risk scores, set limit orders, and auto-invest with strategy portfolios — all from Telegram.",
   });
   console.log(desc.ok ? "  Description set" : "  Description failed", desc);
 

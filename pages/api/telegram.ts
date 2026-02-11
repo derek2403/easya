@@ -17,21 +17,27 @@ bot.start((ctx) => {
       `\n` +
       `<b>What I can do:</b>\n` +
       `\n` +
-      `/tokens — Browse latest tokens with AI risk scores\n` +
-      `/trade  — Open the trading panel\n` +
+      `/tokens    — Browse tokens with AI risk scores\n` +
+      `/trade     — Submit a market trade\n` +
+      `/limit     — Set a limit order\n` +
+      `/strategy  — Auto-invest with risk-tiered portfolios\n` +
       `\n` +
       `Tap <b>Menu</b> below to open the app anytime.`,
     {
       reply_markup: {
         inline_keyboard: [
           [
+            { text: "📊 Tokens", callback_data: "tokens_0" },
+            { text: "📈 Trade", web_app: { url: `${appUrl}/trade` } },
+          ],
+          [
             {
-              text: "📊 Browse Tokens",
-              callback_data: "tokens_0",
+              text: "⏳ Limit Order",
+              web_app: { url: `${appUrl}/limit-order` },
             },
             {
-              text: "📈 Trade",
-              web_app: { url: `${appUrl}/trade` },
+              text: "💼 Strategy",
+              callback_data: "strategy_menu",
             },
           ],
         ],
@@ -60,6 +66,54 @@ bot.command("trade", (ctx) => {
   );
 });
 
+// ── /limit ──────────────────────────────────────────────
+bot.command("limit", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  ctx.replyWithHTML(
+    `<b>Limit Orders</b>\n\n` +
+      `Set buy/sell orders that trigger at your target price.\n` +
+      `Orders execute automatically when the price is reached.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "Set Limit Order",
+              web_app: { url: `${appUrl}/limit-order` },
+            },
+          ],
+        ],
+      },
+    }
+  );
+});
+
+// ── /strategy ───────────────────────────────────────────
+bot.command("strategy", (ctx) => {
+  ctx.replyWithHTML(
+    `<b>Strategy Portfolios</b>\n\n` +
+      `Deposit USDC and auto-invest across top bonding curve tokens.\n` +
+      `Choose a risk tier that matches your style:\n\n` +
+      `🛡️ <b>Conservative</b> — 8-12% APR · Low risk\n` +
+      `⚖️ <b>Balanced</b> — 15-25% APR · Medium risk\n` +
+      `🚀 <b>Aggressive</b> — 30-60% APR · High risk`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🛡️ Conservative",
+              callback_data: "strat_conservative",
+            },
+            { text: "⚖️ Balanced", callback_data: "strat_balanced" },
+            { text: "🚀 Aggressive", callback_data: "strat_aggressive" },
+          ],
+        ],
+      },
+    }
+  );
+});
+
 // ── /tokens ─────────────────────────────────────────────
 bot.command("tokens", async (ctx) => {
   try {
@@ -74,33 +128,151 @@ bot.command("tokens", async (ctx) => {
   }
 });
 
-// ── Pagination callback ────────────────────────────────
+// ── Callback queries ────────────────────────────────────
 bot.on("callback_query", async (ctx) => {
   const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
-  if (!data?.startsWith("tokens_")) return;
+  if (!data) return;
 
-  const page = parseInt(data.split("_")[1]);
+  // Token pagination
+  if (data.startsWith("tokens_") && data !== "tokens_noop") {
+    const page = parseInt(data.split("_")[1]);
+    try {
+      await ctx.answerCbQuery();
+      const curves = await fetchCurves(30);
+      const { text, keyboard } = buildTokenPage(curves, page);
+      await ctx.editMessageText(text, {
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    } catch (error) {
+      console.error("Pagination error:", error);
+      await ctx.answerCbQuery("Failed to load page");
+    }
+    return;
+  }
 
-  try {
+  // Strategy tier selection
+  if (data.startsWith("strat_")) {
+    const tier = data.replace("strat_", "");
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    try {
+      await ctx.answerCbQuery();
+      await ctx.editMessageText(
+        `<b>💼 ${tier.charAt(0).toUpperCase() + tier.slice(1)} Strategy</b>\n\n` +
+          `Opening portfolio builder...`,
+        {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: `Open ${tier.charAt(0).toUpperCase() + tier.slice(1)} Portfolio`,
+                  web_app: { url: `${appUrl}/strategy?tier=${tier}` },
+                },
+              ],
+              [
+                {
+                  text: "◀ Back to tiers",
+                  callback_data: "strategy_menu",
+                },
+              ],
+            ],
+          },
+        }
+      );
+    } catch {
+      await ctx.answerCbQuery("Failed to load");
+    }
+    return;
+  }
+
+  // Strategy menu (back button)
+  if (data === "strategy_menu") {
+    try {
+      await ctx.answerCbQuery();
+      await ctx.editMessageText(
+        `<b>Strategy Portfolios</b>\n\n` +
+          `Deposit USDC and auto-invest across top bonding curve tokens.\n` +
+          `Choose a risk tier that matches your style:\n\n` +
+          `🛡️ <b>Conservative</b> — 8-12% APR · Low risk\n` +
+          `⚖️ <b>Balanced</b> — 15-25% APR · Medium risk\n` +
+          `🚀 <b>Aggressive</b> — 30-60% APR · High risk`,
+        {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🛡️ Conservative",
+                  callback_data: "strat_conservative",
+                },
+                { text: "⚖️ Balanced", callback_data: "strat_balanced" },
+                {
+                  text: "🚀 Aggressive",
+                  callback_data: "strat_aggressive",
+                },
+              ],
+            ],
+          },
+        }
+      );
+    } catch {
+      await ctx.answerCbQuery();
+    }
+    return;
+  }
+
+  // Noop (page indicator)
+  if (data === "tokens_noop") {
     await ctx.answerCbQuery();
-    const curves = await fetchCurves(30);
-    const { text, keyboard } = buildTokenPage(curves, page);
-    await ctx.editMessageText(text, {
-      parse_mode: "HTML",
-      reply_markup: { inline_keyboard: keyboard },
-    });
-  } catch (error) {
-    console.error("Pagination error:", error);
-    await ctx.answerCbQuery("Failed to load page");
+    return;
   }
 });
 
-// ── Web App data (trade submission) ────────────────────
+// ── Web App data (trade/limit/strategy submissions) ─────
 bot.on("web_app_data", (ctx) => {
   try {
     const data = JSON.parse(ctx.message.web_app_data.data);
-    const { pair, side, amount, entry, takeProfit, stopLoss } = data;
 
+    // Limit order submission
+    if (data.type === "limit_order") {
+      const sideEmoji = data.side === "buy" ? "🟢" : "🔴";
+      ctx.replyWithHTML(
+        `<b>⏳ Limit Order Placed</b>\n` +
+          `\n` +
+          `${sideEmoji} <b>${data.side.toUpperCase()}</b> ${data.symbol}\n` +
+          `\n` +
+          `<code>Trigger    $${data.triggerPrice}</code>\n` +
+          `<code>Amount     ${data.amount} USDT</code>\n` +
+          `\n` +
+          `<i>Order will execute when price reaches trigger.</i>`
+      );
+      return;
+    }
+
+    // Strategy investment
+    if (data.type === "strategy_invest") {
+      const allocs = data.allocations
+        .map(
+          (a: { symbol: string; weight: number }) =>
+            `  ${a.symbol}: ${a.weight}%`
+        )
+        .join("\n");
+      ctx.replyWithHTML(
+        `<b>💼 Strategy Invested</b>\n` +
+          `\n` +
+          `Tier: <b>${data.tier.charAt(0).toUpperCase() + data.tier.slice(1)}</b>\n` +
+          `Amount: <b>$${data.amount} USDC</b>\n` +
+          `\n` +
+          `<code>${allocs}</code>\n` +
+          `\n` +
+          `<i>Portfolio is now active. Rebalancing is automatic.</i>`
+      );
+      return;
+    }
+
+    // Regular trade submission
+    const { pair, side, amount, entry, takeProfit, stopLoss } = data;
     const sideEmoji = side === "buy" ? "🟢" : "🔴";
     ctx.replyWithHTML(
       `<b>Trade Submitted</b>\n` +
@@ -113,7 +285,7 @@ bot.on("web_app_data", (ctx) => {
         `<code>SL         ${stopLoss || "—"}</code>`
     );
   } catch {
-    ctx.reply("Failed to process trade data.");
+    ctx.reply("Failed to process data.");
   }
 });
 
@@ -125,7 +297,6 @@ function buildTokenPage(curves: Curve[], page: number) {
   const slice = curves.slice(start, start + PAGE_SIZE);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-  // Build the formatted message
   let text = `<b>📊 Token Scanner</b>  ·  Page ${safePage + 1}/${totalPages}\n\n`;
 
   for (const curve of slice) {
@@ -149,7 +320,6 @@ function buildTokenPage(curves: Curve[], page: number) {
 
   text += `<i>Tap a token below for detailed AI analysis</i>`;
 
-  // Token detail buttons (one per token)
   const tokenButtons = slice.map((curve) => [
     {
       text: `${computeRiskScore(curve).emoji} ${curve.symbol} — View Analysis`,
@@ -157,7 +327,6 @@ function buildTokenPage(curves: Curve[], page: number) {
     },
   ]);
 
-  // Pagination nav
   const navRow: { text: string; callback_data: string }[] = [];
   if (safePage > 0) {
     navRow.push({ text: "◀ Prev", callback_data: `tokens_${safePage - 1}` });
@@ -171,7 +340,6 @@ function buildTokenPage(curves: Curve[], page: number) {
   }
 
   const keyboard = [...tokenButtons, navRow];
-
   return { text, keyboard };
 }
 

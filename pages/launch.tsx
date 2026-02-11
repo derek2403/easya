@@ -553,6 +553,14 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     overflow: "hidden",
     border: "1px solid #ffffff12",
+    alignItems: "center",
+  },
+  purchaseToggle: {
+    padding: "11px 12px",
+    fontSize: 11,
+    color: "#555",
+    whiteSpace: "nowrap" as const,
+    backgroundColor: "var(--tg-theme-bg-color, #0f1117)",
   },
   purchaseInput: {
     flex: 1,

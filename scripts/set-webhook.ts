@@ -1,16 +1,13 @@
 /**
- * One-time script to register the Telegram webhook.
+ * Sets up the Telegram bot: webhook, commands menu, and description.
  *
  * Usage:
  *   npx tsx scripts/set-webhook.ts
- *
- * Make sure .env.local has BOT_TOKEN and NEXT_PUBLIC_APP_URL set.
  */
 
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-// Load .env.local manually (this script runs outside Next.js)
 const envPath = resolve(__dirname, "..", ".env.local");
 const envContent = readFileSync(envPath, "utf-8");
 const env: Record<string, string> = {};
@@ -25,32 +22,74 @@ const BOT_TOKEN = env.BOT_TOKEN;
 const APP_URL = env.NEXT_PUBLIC_APP_URL;
 
 if (!BOT_TOKEN || BOT_TOKEN === "your_bot_token_here") {
-  console.error("❌ Set BOT_TOKEN in .env.local first");
+  console.error("Set BOT_TOKEN in .env.local first");
   process.exit(1);
 }
 
 if (!APP_URL || APP_URL.includes("your-ngrok-url")) {
-  console.error("❌ Set NEXT_PUBLIC_APP_URL in .env.local first");
+  console.error("Set NEXT_PUBLIC_APP_URL in .env.local first");
   process.exit(1);
 }
 
-const webhookUrl = `${APP_URL}/api/telegram`;
+const api = (method: string, body?: Record<string, unknown>) =>
+  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then((r) => r.json());
 
 async function main() {
-  console.log(`Setting webhook to: ${webhookUrl}`);
+  // 1. Set webhook
+  console.log("Setting webhook...");
+  const wh = await api("setWebhook", {
+    url: `${APP_URL}/api/telegram`,
+  });
+  console.log(wh.ok ? "  Webhook set" : "  Webhook failed", wh);
 
-  const res = await fetch(
-    `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}`
+  // 2. Set bot commands (shows in the menu)
+  console.log("Setting commands...");
+  const cmds = await api("setMyCommands", {
+    commands: [
+      { command: "start", description: "Welcome & help" },
+      { command: "profile", description: "Wallet & portfolio" },
+      { command: "tokens", description: "Browse tokens with AI risk scores" },
+      { command: "trade", description: "Submit a market trade" },
+      { command: "limit", description: "Set a limit order" },
+      { command: "strategy", description: "Auto-invest portfolios" },
+      { command: "launch", description: "Launch a new startup token" },
+    ],
+  });
+  console.log(cmds.ok ? "  Commands set" : "  Commands failed", cmds);
+
+  // 3. Set bot description (shown before user starts the bot)
+  console.log("Setting description...");
+  const desc = await api("setMyDescription", {
+    description:
+      "Your AI-powered crypto trading assistant. Analyze tokens with risk scores, set limit orders, and auto-invest with strategy portfolios — all from Telegram.",
+  });
+  console.log(desc.ok ? "  Description set" : "  Description failed", desc);
+
+  // 4. Set short description (shown in chat list / sharing)
+  const sdesc = await api("setMyShortDescription", {
+    short_description: "AI crypto token analyzer & trading bot",
+  });
+  console.log(
+    sdesc.ok ? "  Short description set" : "  Short description failed",
+    sdesc
   );
-  const data = await res.json();
 
-  if (data.ok) {
-    console.log("✅ Webhook set successfully!");
-    console.log(data);
-  } else {
-    console.error("❌ Failed to set webhook:");
-    console.error(data);
-  }
+  // 5. Set the Menu button to open the Mini App
+  console.log("Setting menu button...");
+  const menu = await api("setChatMenuButton", {
+    menu_button: {
+      type: "web_app",
+      text: "Open App",
+      web_app: { url: `${APP_URL}/profile` },
+    },
+  });
+  console.log(menu.ok ? "  Menu button set" : "  Menu button failed", menu);
+
+  console.log("\nDone! Bot is fully configured.");
 }
 
 main();

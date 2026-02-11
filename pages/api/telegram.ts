@@ -33,7 +33,10 @@ bot.start((ctx) => {
               text: "👤 Profile",
               web_app: { url: `${appUrl}/profile` },
             },
-            { text: "📊 Tokens", callback_data: "tokens_0" },
+            {
+              text: "📊 Tokens",
+              web_app: { url: `${appUrl}/analyze` },
+            },
           ],
           [
             { text: "📈 Trade", web_app: { url: `${appUrl}/trade` } },
@@ -45,7 +48,7 @@ bot.start((ctx) => {
           [
             {
               text: "💼 Strategy",
-              callback_data: "strategy_menu",
+              web_app: { url: `${appUrl}/strategy` },
             },
             {
               text: "🚀 Launch",
@@ -122,23 +125,18 @@ bot.command("limit", (ctx) => {
 
 // ── /strategy ───────────────────────────────────────────
 bot.command("strategy", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   ctx.replyWithHTML(
-    `<b>Strategy Portfolios</b>\n\n` +
-      `Deposit USDC and auto-invest across top bonding curve tokens.\n` +
-      `Choose a risk tier that matches your style:\n\n` +
-      `🛡️ <b>Conservative</b> — 8-12% APR · Low risk\n` +
-      `⚖️ <b>Balanced</b> — 15-25% APR · Medium risk\n` +
-      `🚀 <b>Aggressive</b> — 30-60% APR · High risk`,
+    `<b>💼 Strategy Portfolios</b>\n\n` +
+      `Auto-invest across top bonding curve tokens with risk-tiered portfolios.`,
     {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: "🛡️ Conservative",
-              callback_data: "strat_conservative",
+              text: "Open Strategy",
+              web_app: { url: `${appUrl}/strategy` },
             },
-            { text: "⚖️ Balanced", callback_data: "strat_balanced" },
-            { text: "🚀 Aggressive", callback_data: "strat_aggressive" },
           ],
         ],
       },
@@ -169,17 +167,24 @@ bot.command("launch", (ctx) => {
 });
 
 // ── /tokens ─────────────────────────────────────────────
-bot.command("tokens", async (ctx) => {
-  try {
-    const curves = await fetchCurves(30);
-    const { text, keyboard } = buildTokenPage(curves, 0);
-    await ctx.replyWithHTML(text, {
-      reply_markup: { inline_keyboard: keyboard },
-    });
-  } catch (error) {
-    console.error("Error fetching tokens:", error);
-    ctx.reply("Failed to fetch tokens. Try again later.");
-  }
+bot.command("tokens", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  ctx.replyWithHTML(
+    `<b>📊 Token Scanner</b>\n\n` +
+      `Browse bonding curve tokens with AI-powered risk analysis.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "Open Token Scanner",
+              web_app: { url: `${appUrl}/analyze` },
+            },
+          ],
+        ],
+      },
+    }
+  );
 });
 
 // ── Callback queries ────────────────────────────────────

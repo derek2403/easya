@@ -173,7 +173,7 @@ export default function ProfilePage() {
         <div style={s.container}>
           <div style={s.center}>
             <div style={s.spinner} />
-            <p style={{ color: "#888", marginTop: 12 }}>Loading profile...</p>
+            <p style={{ fontSize: 15, color: "#888" }}>Loading profile...</p>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         </div>
@@ -220,13 +220,7 @@ export default function ProfilePage() {
       <div style={s.container}>
         <div style={s.content}>
           {/* Wallet Card */}
-          <div
-            style={{
-              ...s.card,
-              background: "linear-gradient(135deg, #2481cc11, #6366f111)",
-              border: "1px solid #2481cc33",
-            }}
-          >
+          <div style={s.card}>
             <div
               style={{
                 display: "flex",
@@ -235,17 +229,17 @@ export default function ProfilePage() {
                 marginBottom: 16,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
                     background: "#2481cc22",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 14,
+                    fontSize: 16,
                   }}
                 >
                   &#128176;
@@ -255,7 +249,7 @@ export default function ProfilePage() {
                     style={{
                       fontSize: 13,
                       fontFamily: "monospace",
-                      color: "#aaa",
+                      color: "#888",
                       margin: 0,
                     }}
                   >
@@ -264,10 +258,10 @@ export default function ProfilePage() {
                   <p
                     style={{
                       fontSize: 10,
-                      color: "#555",
+                      color: "#666",
                       margin: "2px 0 0",
                       textTransform: "uppercase",
-                      letterSpacing: 0.5,
+                      letterSpacing: 1,
                     }}
                   >
                     Base Network
@@ -291,11 +285,11 @@ export default function ProfilePage() {
             </p>
             <p
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 color: "#666",
-                margin: "4px 0 0",
+                margin: "6px 0 0",
                 textTransform: "uppercase",
-                letterSpacing: 0.8,
+                letterSpacing: 1,
               }}
             >
               Total Portfolio Value
@@ -305,10 +299,10 @@ export default function ProfilePage() {
                 display: "inline-block",
                 marginTop: 8,
                 padding: "4px 12px",
-                borderRadius: 20,
-                background: `${pnlColor}15`,
+                borderRadius: 12,
+                background: `${pnlColor}22`,
                 color: pnlColor,
-                fontSize: 13,
+                fontSize: 11,
                 fontWeight: 700,
               }}
             >
@@ -345,10 +339,10 @@ export default function ProfilePage() {
                   $
                 </div>
                 <div>
-                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
                     USDC
                   </p>
-                  <p style={{ fontSize: 12, color: "#666", margin: "2px 0 0" }}>
+                  <p style={{ fontSize: 11, color: "#666", margin: "3px 0 0" }}>
                     Available balance
                   </p>
                 </div>
@@ -378,7 +372,7 @@ export default function ProfilePage() {
 
           {portfolio.holdings.length === 0 ? (
             <div style={{ ...s.card, textAlign: "center" }}>
-              <p style={{ color: "#555", fontSize: 13, margin: 0 }}>
+              <p style={{ color: "#666", fontSize: 13, margin: 0 }}>
                 No holdings yet. Start trading to build your portfolio.
               </p>
             </div>
@@ -400,14 +394,14 @@ export default function ProfilePage() {
                     }}
                   >
                     <div>
-                      <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
                         {h.symbol}
                       </p>
                       <p
                         style={{
-                          fontSize: 12,
+                          fontSize: 11,
                           color: "#666",
-                          margin: "2px 0 0",
+                          margin: "3px 0 0",
                         }}
                       >
                         {h.name}
@@ -416,7 +410,7 @@ export default function ProfilePage() {
                     <div style={{ textAlign: "right" }}>
                       <p
                         style={{
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: 700,
                           margin: 0,
                           fontFamily: "monospace",
@@ -426,10 +420,10 @@ export default function ProfilePage() {
                       </p>
                       <p
                         style={{
-                          fontSize: 12,
+                          fontSize: 11,
                           color: hColor,
-                          margin: "2px 0 0",
-                          fontWeight: 600,
+                          margin: "3px 0 0",
+                          fontWeight: 700,
                         }}
                       >
                         {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} (
@@ -443,8 +437,8 @@ export default function ProfilePage() {
                       display: "flex",
                       justifyContent: "space-between",
                       marginTop: 10,
-                      fontSize: 12,
-                      color: "#555",
+                      fontSize: 11,
+                      color: "#666",
                     }}
                   >
                     <span>
@@ -515,7 +509,7 @@ export default function ProfilePage() {
                         <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
                           {order.side.toUpperCase()} {order.symbol}
                         </p>
-                        <p style={{ fontSize: 11, color: "#555", margin: "2px 0 0" }}>
+                        <p style={{ fontSize: 11, color: "#666", margin: "3px 0 0" }}>
                           Trigger: ${parseFloat(order.triggerPrice) < 0.0001
                             ? parseFloat(order.triggerPrice).toExponential(2)
                             : parseFloat(order.triggerPrice).toPrecision(4)}
@@ -562,8 +556,8 @@ export default function ProfilePage() {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "8px 0",
-                      borderBottom: "1px solid #ffffff06",
+                      padding: "10px 0",
+                      borderTop: "1px solid #ffffff08",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -597,8 +591,8 @@ export default function ProfilePage() {
                         <p
                           style={{
                             fontSize: 11,
-                            color: "#555",
-                            margin: "1px 0 0",
+                            color: "#666",
+                            margin: "2px 0 0",
                           }}
                         >
                           {t.type === "reserve"
@@ -641,14 +635,13 @@ export default function ProfilePage() {
           <p
             style={{
               fontSize: 10,
-              color: "#444",
+              color: "#666",
               textAlign: "center",
               marginTop: 8,
               textTransform: "uppercase",
-              letterSpacing: 0.5,
+              letterSpacing: 1,
             }}
           >
-            Demo Mode · Paper Trading
           </p>
         </div>
       </div>
@@ -671,10 +664,11 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     height: "100vh",
+    gap: 16,
   },
   spinner: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     border: "3px solid #333",
     borderTopColor: "#2481cc",
     borderRadius: "50%",
@@ -684,7 +678,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
     borderRadius: 16,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 13,
@@ -692,16 +686,16 @@ const s: Record<string, React.CSSProperties> = {
     color: "#888",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    margin: "20px 0 10px",
+    margin: "20px 0 14px",
   },
   copyBtn: {
-    padding: "5px 14px",
-    borderRadius: 10,
-    border: "1px solid #2481cc44",
-    background: "#2481cc15",
+    padding: "4px 12px",
+    borderRadius: 12,
+    border: "none",
+    background: "#2481cc22",
     color: "#2481cc",
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: 11,
+    fontWeight: 700,
     cursor: "pointer",
   },
   refreshBtn: {
@@ -709,7 +703,7 @@ const s: Record<string, React.CSSProperties> = {
     marginTop: 20,
     padding: "12px 0",
     borderRadius: 12,
-    border: "1px solid #ffffff12",
+    border: "none",
     background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
     color: "#888",
     fontSize: 14,

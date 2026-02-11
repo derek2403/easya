@@ -153,7 +153,7 @@ export default function StrategyPage() {
         {loading && (
           <div style={s.center}>
             <div style={s.spinner} />
-            <p style={{ color: "#888", marginTop: 12 }}>
+            <p style={{ color: "#888", fontSize: 15, margin: 0 }}>
               Computing allocations...
             </p>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -394,7 +394,7 @@ export default function StrategyPage() {
                   </div>
                 )}
                 {balanceError && (
-                  <div style={{ background: "#f6465d22", border: "1px solid #f6465d44", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#f6465d", textAlign: "center", marginBottom: 10 }}>
+                  <div style={{ background: "#f6465d22", border: "1px solid #f6465d44", borderRadius: 12, padding: "8px 12px", fontSize: 13, color: "#f6465d", textAlign: "center", marginBottom: 10 }}>
                     {balanceError}
                   </div>
                 )}
@@ -511,10 +511,11 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     height: "100vh",
+    gap: 16,
   },
   spinner: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     border: "3px solid #333",
     borderTopColor: "#2481cc",
     borderRadius: "50%",
@@ -533,7 +534,7 @@ const s: Record<string, React.CSSProperties> = {
     gap: 4,
     padding: "12px 0",
     borderRadius: 12,
-    border: "1px solid #ffffff12",
+    border: "1px solid #ffffff08",
     background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
     color: "#888",
     cursor: "pointer",
@@ -548,7 +549,7 @@ const s: Record<string, React.CSSProperties> = {
   input: {
     padding: "12px 14px",
     borderRadius: 12,
-    border: "1px solid #ffffff12",
+    border: "1px solid #ffffff08",
     background: "var(--tg-theme-bg-color, #0f1117)",
     color: "var(--tg-theme-text-color, #e4e4e7)",
     fontSize: 15,

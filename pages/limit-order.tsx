@@ -3,7 +3,6 @@ import Head from "next/head";
 import Script from "next/script";
 import {
   createChart,
-  LineSeries,
   type IChartApi,
   type ISeriesApi,
   LineStyle,
@@ -33,14 +32,22 @@ interface DrawBox {
   entryPrice: number; // lower price
   tpPrice: number; // upper price
   amount: string;
+  side: "buy" | "sell";
 }
 
 type View = "form" | "success";
 
 function formatPrice(p: number): string {
   if (p === 0) return "$0";
-  if (p < 0.0001) return `$${p.toExponential(2)}`;
-  if (p < 1) return `$${p.toPrecision(4)}`;
+  if (p < 0.000001) {
+    // Count leading zeros after decimal, then show 2 significant digits
+    const str = p.toFixed(20);
+    const match = str.match(/^0\.(0+)/);
+    const zeros = match ? match[1].length : 0;
+    return `$0.${"0".repeat(zeros)}${Math.round(p * Math.pow(10, zeros + 2))}`;
+  }
+  if (p < 0.01) return `$${p.toFixed(8).replace(/0+$/, "")}`;
+  if (p < 1) return `$${p.toFixed(4)}`;
   return `$${p.toFixed(2)}`;
 }
 
@@ -50,6 +57,9 @@ export default function LimitOrderPage() {
   const [loading, setLoading] = useState(true);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const [triggeredBoxes, setTriggeredBoxes] = useState<Set<string>>(new Set());
+  const animTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Chart
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -73,6 +83,7 @@ export default function LimitOrderPage() {
     y: number;
   } | null>(null);
   const [defaultAmount, setDefaultAmount] = useState("5");
+  const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
 
   // Balance
   const [balance, setBalance] = useState<number | null>(null);
@@ -110,18 +121,51 @@ export default function LimitOrderPage() {
 
   useEffect(() => {
     if (!selectedToken) return;
-    setChartLoading(true);
     setBoxes([]);
-    fetch(`/api/chart-data?curveId=${selectedToken.id}&limit=100`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.chartData) {
-          setChartData(data.chartData);
-          setCurrentPrice(data.currentPrice || 0);
-        }
-        setChartLoading(false);
-      })
-      .catch(() => setChartLoading(false));
+    setTriggeredBoxes(new Set());
+    if (animTimerRef.current) {
+      clearInterval(animTimerRef.current);
+      animTimerRef.current = null;
+    }
+    setAnimating(false);
+
+    // Generate mock price data with distinct segments
+    const now = Math.floor(Date.now() / 1000);
+    const interval = 3600; // 1 hour
+    const points: ChartPoint[] = [];
+    let price = 0.00025; // starting price
+
+    // Segment 1: Accumulation (flat / slight rise) — 20 points
+    for (let i = 0; i < 20; i++) {
+      price += (Math.random() - 0.45) * 0.000005;
+      price = Math.max(price, 0.0001);
+      points.push({ time: now - (80 - i) * interval, value: price });
+    }
+    // Segment 2: Breakout (sharp rise) — 15 points
+    for (let i = 0; i < 15; i++) {
+      price += Math.random() * 0.00004 + 0.00001;
+      points.push({ time: now - (60 - i) * interval, value: price });
+    }
+    // Segment 3: Distribution (choppy top) — 20 points
+    const topPrice = price;
+    for (let i = 0; i < 20; i++) {
+      price = topPrice + (Math.random() - 0.5) * 0.00008;
+      points.push({ time: now - (45 - i) * interval, value: price });
+    }
+    // Segment 4: Pullback (decline) — 15 points
+    for (let i = 0; i < 15; i++) {
+      price -= Math.random() * 0.00003 + 0.000005;
+      price = Math.max(price, 0.00015);
+      points.push({ time: now - (25 - i) * interval, value: price });
+    }
+    // Segment 5: Recovery (gradual rise) — 10 points
+    for (let i = 0; i < 10; i++) {
+      price += Math.random() * 0.00002 + 0.000005;
+      points.push({ time: now - (10 - i) * interval, value: price });
+    }
+
+    setChartData(points);
+    setCurrentPrice(price);
   }, [selectedToken]);
 
   // Create chart
@@ -154,65 +198,70 @@ export default function LimitOrderPage() {
       width: container.clientWidth,
       height: 350,
       layout: {
-        background: { color: "#0a0b0f" },
-        textColor: "#666",
-        fontSize: 10,
+        background: { color: "transparent" },
+        textColor: "#9ca3af",
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: "#ffffff06" },
-        horzLines: { color: "#ffffff06" },
+        vertLines: { color: "rgba(255, 255, 255, 0.05)" },
+        horzLines: { color: "rgba(255, 255, 255, 0.05)" },
       },
       timeScale: {
-        borderColor: "#ffffff10",
+        borderColor: "rgba(255, 255, 255, 0.1)",
         timeVisible: true,
         secondsVisible: false,
+        shiftVisibleRangeOnNewBar: false,
       },
       rightPriceScale: {
-        borderColor: "#ffffff10",
-        scaleMargins: { top: 0.08, bottom: 0.08 },
+        borderColor: "rgba(255, 255, 255, 0.1)",
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        autoScale: true,
       },
       localization: {
-        priceFormatter: (price: number) => {
-          if (price === 0) return "0";
-          if (price < 0.0001) return price.toExponential(2);
-          if (price < 1) return price.toPrecision(precision > 6 ? 4 : 3);
-          return price.toFixed(2);
-        },
+        priceFormatter: (price: number) => formatPrice(price),
       },
       crosshair: {
-        mode: 0,
+        mode: 1,
         horzLine: {
-          color: "#ffffff30",
+          color: "rgba(255, 255, 255, 0.3)",
           style: LineStyle.Dashed,
-          labelBackgroundColor: "#2481cc",
+          labelBackgroundColor: "#10b981",
         },
         vertLine: {
-          color: "#ffffff15",
+          color: "rgba(255, 255, 255, 0.3)",
           style: LineStyle.Dashed,
-          labelBackgroundColor: "#333",
+          labelBackgroundColor: "#10b981",
         },
       },
       handleScroll: false,
       handleScale: false,
     });
 
-    const lineSeries = chart.addSeries(LineSeries, {
-      color: "#4a90d9",
+    const lineSeries = chart.addLineSeries({
+      color: "#10b981",
       lineWidth: 2,
       priceLineVisible: false,
-      lastValueVisible: true,
+      lastValueVisible: false,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      priceFormat: {
+        type: "custom",
+        formatter: (price: number) => formatPrice(price),
+        minMove: samplePrice < 0.0001 ? 0.0000000001 : samplePrice < 0.01 ? 0.00000001 : 0.01,
+      },
     });
 
-    const formatted = chartData.map((p) => ({
-      time: p.time as import("lightweight-charts").Time,
-      value: p.value,
-    }));
-    lineSeries.setData(formatted);
+    lineSeries.setData(
+      chartData.map((p) => ({
+        time: p.time as import("lightweight-charts").Time,
+        value: p.value,
+      }))
+    );
 
     if (currentPrice > 0) {
       lineSeries.createPriceLine({
         price: currentPrice,
-        color: "#f0b90b88",
+        color: "#10b981",
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
@@ -220,11 +269,11 @@ export default function LimitOrderPage() {
       });
     }
 
-    // Data on the left ~20%, blank space on the right for drawing future orders
+    // Show recent data on the left ~30%, blank space on right for drawing boxes
     const totalBars = chartData.length;
     chart.timeScale().setVisibleLogicalRange({
       from: 0,
-      to: totalBars * 5,
+      to: totalBars * 3,
     });
     chartRef.current = chart;
     seriesRef.current = lineSeries;
@@ -335,6 +384,7 @@ export default function LimitOrderPage() {
       entryPrice: low,
       tpPrice: high,
       amount: defaultAmount,
+      side: orderSide,
     };
 
     setBoxes((prev) => [...prev, newBox]);
@@ -452,12 +502,95 @@ export default function LimitOrderPage() {
         );
       }
 
+      // Show placed, then animate line extending into empty space
+      setSubmitting(false);
       setView("success");
+
+      const startTime = chartData[chartData.length - 1]?.time || Math.floor(Date.now() / 1000);
+      const basePrice = currentPrice;
+      const savedBoxes = [...boxes];
+
+      // Fixed path: up with swings, then back down
+      const path = [
+        0.02, 0.05, 0.03, -0.01, -0.04, -0.08, -0.05, -0.02,
+        0.01, 0.06, 0.12, 0.15, 0.10, 0.07, 0.03, -0.02,
+        -0.06, -0.10, -0.13, -0.09, -0.05, 0.00, 0.04, 0.09,
+        0.14, 0.18, 0.22, 0.19, 0.15, 0.11, 0.08, 0.13,
+        0.17, 0.21, 0.25, 0.20, 0.16, 0.22, 0.28, 0.32,
+        // Peak then descend
+        0.28, 0.24, 0.20, 0.15, 0.18, 0.12, 0.08, 0.05,
+        0.01, -0.03, -0.07, -0.04, -0.09, -0.13, -0.10, -0.15,
+        -0.18, -0.14, -0.20, -0.22,
+      ];
+      let tickCount = 0;
+      const triggered = new Set<string>();
+
+      // Small delay before animation starts
       setTimeout(() => {
         setView("form");
-        setBoxes([]);
-      }, 2500);
-    } finally {
+        setAnimating(true);
+        setTriggeredBoxes(new Set());
+
+        // Lock the price scale so it never rescales
+        if (chartRef.current) {
+          chartRef.current.priceScale("right").applyOptions({ autoScale: false });
+        }
+
+        animTimerRef.current = setInterval(() => {
+          if (!seriesRef.current || tickCount >= path.length) {
+            if (animTimerRef.current) clearInterval(animTimerRef.current);
+            animTimerRef.current = null;
+            setAnimating(false);
+            return;
+          }
+
+          const price = basePrice * (1 + path[tickCount]);
+          const currentTime = startTime + (tickCount + 1) * 3600;
+
+          seriesRef.current.update({
+            time: currentTime as import("lightweight-charts").Time,
+            value: price,
+          });
+
+          // Get the x pixel position of the current line tip
+          const lineX = chartRef.current?.timeScale().timeToCoordinate(
+            currentTime as import("lightweight-charts").Time
+          );
+
+          // Only trigger if price is in range AND line has reached the box horizontally
+          if (lineX !== null && lineX !== undefined) {
+            for (const box of savedBoxes) {
+              if (
+                !triggered.has(box.id) &&
+                price >= box.entryPrice &&
+                price <= box.tpPrice &&
+                (lineX as number) >= box.left
+              ) {
+                triggered.add(box.id);
+                setTriggeredBoxes(new Set(triggered));
+              }
+            }
+          }
+
+          // Update box pixel positions from price values
+          if (seriesRef.current) {
+            const s = seriesRef.current;
+            setBoxes((prev) =>
+              prev.map((b) => {
+                const yTop = s.priceToCoordinate(b.tpPrice);
+                const yBot = s.priceToCoordinate(b.entryPrice);
+                if (yTop === null || yBot === null) return b;
+                const newTop = Math.min(yTop as number, yBot as number);
+                const newHeight = Math.abs((yBot as number) - (yTop as number));
+                return { ...b, top: newTop, height: newHeight };
+              })
+            );
+          }
+
+          tickCount++;
+        }, 120);
+      }, 1200);
+    } catch {
       setSubmitting(false);
     }
   };
@@ -515,55 +648,93 @@ export default function LimitOrderPage() {
 
           {view === "form" && (
             <>
-              {/* Header */}
-              <div style={s.header}>
-                <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>
-                    Limit Order
-                  </h2>
-                  {balance !== null && (
-                    <p style={{ fontSize: 11, color: "#666", margin: "2px 0 0" }}>
-                      Balance:{" "}
-                      <span style={{ color: "#0ecb81", fontWeight: 600, fontFamily: "monospace" }}>
-                        ${balance.toFixed(2)}
-                      </span>
-                    </p>
-                  )}
+              {/* Header Card */}
+              <div style={s.headerCard}>
+                <div style={s.header}>
+                  <div>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#000" }}>
+                      Limit Order
+                    </h2>
+                    {balance !== null && (
+                      <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>
+                        Balance:{" "}
+                        <span style={{ color: "#0ecb81", fontWeight: 700, fontFamily: "monospace", fontSize: 14 }}>
+                          ${balance.toFixed(2)}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  <select
+                    value={selectedToken?.id || ""}
+                    onChange={(e) => {
+                      const t = tokens.find((tk) => tk.id === e.target.value);
+                      if (t) setSelectedToken(t);
+                    }}
+                    style={s.tokenSelect}
+                  >
+                    {tokens.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.symbol}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <select
-                  value={selectedToken?.id || ""}
-                  onChange={(e) => {
-                    const t = tokens.find((tk) => tk.id === e.target.value);
-                    if (t) setSelectedToken(t);
-                  }}
-                  style={s.tokenSelect}
-                >
-                  {tokens.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.symbol}
-                    </option>
+
+                {/* Buy / Sell toggle */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button
+                    onClick={() => setOrderSide("buy")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 0",
+                      borderRadius: 10,
+                      border: orderSide === "buy" ? "1px solid #10b981" : "1px solid #ddd",
+                      background: orderSide === "buy" ? "#10b981" : "#f5f5f5",
+                      color: orderSide === "buy" ? "#fff" : "#333",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    BUY
+                  </button>
+                  <button
+                    onClick={() => setOrderSide("sell")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 0",
+                      borderRadius: 10,
+                      border: orderSide === "sell" ? "1px solid #ef4444" : "1px solid #ddd",
+                      background: orderSide === "sell" ? "#ef4444" : "#f5f5f5",
+                      color: orderSide === "sell" ? "#fff" : "#333",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    SELL
+                  </button>
+                </div>
+
+                {/* Amount selector */}
+                <div style={s.amountRow}>
+                  <span style={{ fontSize: 11, color: "#333", fontWeight: 600 }}>Amount per box:</span>
+                  {["5", "10", "25", "50"].map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setDefaultAmount(v)}
+                      style={{
+                        ...s.amountChip,
+                        ...(defaultAmount === v ? s.amountChipActive : {}),
+                      }}
+                    >
+                      ${v}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
 
               {balanceError && <div style={s.errorBox}>{balanceError}</div>}
-
-              {/* Amount selector */}
-              <div style={s.amountRow}>
-                <span style={{ fontSize: 11, color: "#666" }}>Per box:</span>
-                {["5", "10", "25", "50"].map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setDefaultAmount(v)}
-                    style={{
-                      ...s.amountChip,
-                      ...(defaultAmount === v ? s.amountChipActive : {}),
-                    }}
-                  >
-                    ${v}
-                  </button>
-                ))}
-              </div>
 
               {/* Chart with drawing area */}
               <div style={s.chartWrap}>
@@ -592,81 +763,77 @@ export default function LimitOrderPage() {
                     <div ref={chartContainerRef} />
 
                     {/* Existing boxes */}
-                    {boxes.map((box) => (
-                      <div key={box.id}>
-                        {/* Box rectangle */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: box.left,
-                            top: box.top,
-                            width: box.width,
-                            height: box.height,
-                            background: "#2481cc18",
-                            border: "1px solid #2481cc66",
-                            borderRadius: 3,
-                            pointerEvents: "none",
-                            zIndex: 10,
-                          }}
-                        />
-                        {/* Amount label */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: box.left + box.width / 2,
-                            top: box.top + box.height / 2,
-                            transform: "translate(-50%, -50%)",
-                            background: "#2481ccdd",
-                            border: "1px solid #2481cc",
-                            borderRadius: 4,
-                            padding: "4px 10px",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "#fff",
-                            pointerEvents: "auto",
-                            cursor: "pointer",
-                            zIndex: 15,
-                            whiteSpace: "nowrap",
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeBox(box.id);
-                          }}
-                        >
-                          ${box.amount}
+                    {boxes.map((box) => {
+                      const hit = triggeredBoxes.has(box.id);
+                      const color = box.side === "buy" ? "#10b981" : "#ef4444";
+                      const dimColor = box.side === "buy"
+                        ? "rgba(16, 185, 129, 0.25)"
+                        : "rgba(239, 68, 68, 0.25)";
+                      const bgColor = box.side === "buy"
+                        ? hit ? "rgba(16, 185, 129, 0.12)" : "rgba(16, 185, 129, 0.05)"
+                        : hit ? "rgba(239, 68, 68, 0.12)" : "rgba(239, 68, 68, 0.05)";
+                      return (
+                        <div key={box.id}>
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: box.left,
+                              top: box.top,
+                              width: box.width,
+                              height: box.height,
+                              background: bgColor,
+                              border: hit
+                                ? `2px solid ${color}`
+                                : `1px solid rgba(255, 255, 255, 0.3)`,
+                              borderRadius: 4,
+                              pointerEvents: "auto",
+                              cursor: "pointer",
+                              zIndex: 10,
+                              transition: "all 0.3s ease",
+                              boxShadow: hit
+                                ? `inset 4px 4px 0 ${color}, inset -4px -4px 0 ${color}, inset 4px -4px 0 ${color}, inset -4px 4px 0 ${color}`
+                                : `inset 4px 4px 0 ${dimColor}, inset -4px -4px 0 ${dimColor}, inset 4px -4px 0 ${dimColor}, inset -4px 4px 0 ${dimColor}`,
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeBox(box.id);
+                            }}
+                          />
+                          {/* Top price */}
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: box.left + 4,
+                              top: box.top - 14,
+                              fontSize: 10,
+                              color: hit ? color : "rgba(255,255,255,0.5)",
+                              fontWeight: 600,
+                              fontFamily: "monospace",
+                              pointerEvents: "none",
+                              zIndex: 15,
+                            }}
+                          >
+                            {formatPrice(box.tpPrice)}
+                          </div>
+                          {/* Bottom price */}
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: box.left + 4,
+                              top: box.top + box.height + 2,
+                              fontSize: 10,
+                              color: hit ? color : "rgba(255,255,255,0.5)",
+                              fontWeight: 600,
+                              fontFamily: "monospace",
+                              pointerEvents: "none",
+                              zIndex: 15,
+                            }}
+                          >
+                            {formatPrice(box.entryPrice)}
+                          </div>
                         </div>
-                        {/* Entry price label (bottom edge) */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: box.left,
-                            top: box.top + box.height + 2,
-                            fontSize: 9,
-                            color: "#0ecb81",
-                            fontFamily: "monospace",
-                            pointerEvents: "none",
-                            zIndex: 15,
-                          }}
-                        >
-                          Entry {formatPrice(box.entryPrice)}
-                        </div>
-                        {/* TP price label (top edge) */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: box.left,
-                            top: box.top - 14,
-                            fontSize: 9,
-                            color: "#2481cc",
-                            fontFamily: "monospace",
-                            pointerEvents: "none",
-                            zIndex: 15,
-                          }}
-                        >
-                          TP {formatPrice(box.tpPrice)}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
 
                     {/* Preview rectangle while drawing */}
                     {previewRect && previewRect.width > 5 && (
@@ -677,9 +844,9 @@ export default function LimitOrderPage() {
                           top: previewRect.top,
                           width: previewRect.width,
                           height: previewRect.height,
-                          background: "#2481cc15",
-                          border: "1px dashed #2481cc88",
-                          borderRadius: 3,
+                          background: orderSide === "buy" ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                          border: orderSide === "buy" ? "1px dashed rgba(16, 185, 129, 0.6)" : "1px dashed rgba(239, 68, 68, 0.6)",
+                          borderRadius: 4,
                           pointerEvents: "none",
                           zIndex: 20,
                         }}
@@ -688,12 +855,6 @@ export default function LimitOrderPage() {
                   </div>
                 )}
 
-                {/* Draw hint */}
-                {chartData.length > 0 && boxes.length === 0 && (
-                  <div style={s.hint}>
-                    Draw boxes on the chart to place orders
-                  </div>
-                )}
               </div>
 
               {/* Order boxes summary */}
@@ -708,21 +869,34 @@ export default function LimitOrderPage() {
                     </span>
                   </div>
 
-                  {boxes.map((box, i) => (
-                    <div key={box.id} style={s.orderRow}>
-                      <div style={s.orderNum}>{i + 1}</div>
+                  {boxes.map((box, i) => {
+                    const isBuy = box.side === "buy";
+                    const sideColor = isBuy ? "#0ecb81" : "#ef4444";
+                    return (
+                    <div key={box.id} style={{
+                      ...s.orderRow,
+                      borderLeft: `3px solid ${sideColor}`,
+                    }}>
+                      <div style={{ ...s.orderNum, background: sideColor }}>{i + 1}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: sideColor, fontWeight: 700, marginBottom: 2 }}>
+                          {isBuy ? "BUY" : "SELL"}
+                        </div>
                         <div style={s.orderPrices}>
                           <span>
-                            <span style={{ color: "#0ecb81" }}>Entry</span>{" "}
-                            <span style={{ fontFamily: "monospace", color: "#aaa" }}>
+                            <span style={{ color: isBuy ? "#0ecb81" : "#ef4444", fontWeight: 700, fontSize: 14 }}>
+                              {isBuy ? "Entry" : "Exit"}
+                            </span>{" "}
+                            <span style={{ fontFamily: "monospace", color: "#000", fontWeight: 700, fontSize: 14 }}>
                               {formatPrice(box.entryPrice)}
                             </span>
                           </span>
-                          <span style={{ color: "#444" }}>→</span>
+                          <span style={{ color: "#000", fontSize: 14 }}>→</span>
                           <span>
-                            <span style={{ color: "#2481cc" }}>TP</span>{" "}
-                            <span style={{ fontFamily: "monospace", color: "#aaa" }}>
+                            <span style={{ color: isBuy ? "#2481cc" : "#f59e0b", fontWeight: 700, fontSize: 14 }}>
+                              {isBuy ? "TP" : "SL"}
+                            </span>{" "}
+                            <span style={{ fontFamily: "monospace", color: "#000", fontWeight: 700, fontSize: 14 }}>
                               {formatPrice(box.tpPrice)}
                             </span>
                           </span>
@@ -735,7 +909,10 @@ export default function LimitOrderPage() {
                         onChange={(e) =>
                           updateBoxAmount(box.id, e.target.value)
                         }
-                        style={s.amountInput}
+                        style={{
+                          ...s.amountInput,
+                          borderColor: sideColor,
+                        }}
                       />
                       <button
                         onClick={() => removeBox(box.id)}
@@ -744,24 +921,27 @@ export default function LimitOrderPage() {
                         &#10005;
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               {/* Submit */}
               <button
                 onClick={handleSubmit}
-                disabled={submitting || boxes.length === 0}
+                disabled={submitting || animating || boxes.length === 0}
                 style={{
                   ...s.submitBtn,
-                  opacity: submitting || boxes.length === 0 ? 0.35 : 1,
+                  opacity: submitting || animating || boxes.length === 0 ? 0.35 : 1,
                 }}
               >
                 {submitting
                   ? "Placing..."
-                  : boxes.length === 0
-                    ? "Draw boxes on chart to create orders"
-                    : `Submit ${boxes.length} Order${boxes.length !== 1 ? "s" : ""} — $${totalAmount.toFixed(2)}`}
+                  : animating
+                    ? "Simulating..."
+                    : boxes.length === 0
+                      ? "Draw boxes on chart to create orders"
+                      : `Submit ${boxes.length} Order${boxes.length !== 1 ? "s" : ""} — $${totalAmount.toFixed(2)}`}
               </button>
 
               {boxes.length > 0 && (
@@ -788,7 +968,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
-  content: { maxWidth: 480, margin: "0 auto", padding: "10px 12px 32px" },
+  content: { maxWidth: 480, margin: "0 auto", padding: "12px 16px 32px" },
   center: {
     display: "flex",
     flexDirection: "column",
@@ -821,60 +1001,59 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 28,
     color: "#0ecb81",
   },
+  headerCard: {
+    background: "#ffffff",
+    borderRadius: 16,
+    padding: "16px",
+    marginBottom: 12,
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   tokenSelect: {
-    padding: "7px 12px",
-    borderRadius: 10,
-    border: "1px solid #ffffff12",
-    background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
-    color: "var(--tg-theme-text-color, #e4e4e7)",
+    padding: "8px 14px",
+    borderRadius: 12,
+    border: "1px solid #ddd",
+    background: "#f5f5f5",
+    color: "#000",
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 700,
     appearance: "none" as const,
-    maxWidth: 140,
+    minWidth: 100,
   },
   amountRow: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    paddingTop: 4,
   },
   amountChip: {
-    padding: "5px 12px",
-    borderRadius: 8,
-    border: "1px solid #ffffff10",
-    background: "#1a1b23",
-    color: "#888",
-    fontSize: 12,
+    padding: "6px 14px",
+    borderRadius: 10,
+    border: "1px solid #ddd",
+    background: "#f5f5f5",
+    color: "#333",
+    fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
+    transition: "all 0.2s",
   },
   amountChipActive: {
-    background: "#2481cc22",
-    color: "#2481cc",
-    border: "1px solid #2481cc55",
+    background: "#10b981",
+    color: "#fff",
+    border: "1px solid #10b981",
   },
   chartWrap: {
-    background: "#0a0b0f",
-    borderRadius: 14,
+    background: "#0c0e14",
+    borderRadius: 16,
     overflow: "hidden",
     position: "relative" as const,
-  },
-  hint: {
-    position: "absolute" as const,
-    bottom: 10,
-    left: 0,
-    right: 0,
-    textAlign: "center" as const,
-    fontSize: 11,
-    color: "#555",
-    pointerEvents: "none" as const,
-    zIndex: 30,
+    border: "1px solid rgba(255,255,255,0.08)",
+    padding: "16px 16px 8px",
+    minHeight: 350,
   },
   errorBox: {
     background: "#f6465d22",
@@ -890,37 +1069,38 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 10,
   },
   summaryLabel: {
-    fontSize: 11,
-    color: "#666",
-    fontWeight: 600,
+    fontSize: 15,
+    color: "#000",
+    fontWeight: 700,
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
   },
   summaryTotal: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: 700,
     fontFamily: "monospace",
-    color: "#2481cc",
+    color: "#10b981",
   },
   orderRow: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    marginBottom: 4,
+    gap: 12,
+    background: "#ffffff",
+    borderRadius: 12,
+    padding: "14px 16px",
+    marginBottom: 8,
+    border: "1px solid #e0e0e0",
   },
   orderNum: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    background: "#2481cc22",
-    color: "#2481cc",
-    fontSize: 11,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    background: "#10b981",
+    color: "#fff",
+    fontSize: 14,
     fontWeight: 700,
     display: "flex",
     alignItems: "center",
@@ -929,50 +1109,51 @@ const s: Record<string, React.CSSProperties> = {
   },
   orderPrices: {
     display: "flex",
-    gap: 6,
-    fontSize: 12,
+    gap: 8,
+    fontSize: 15,
     alignItems: "center",
   },
   amountInput: {
-    width: 52,
-    padding: "4px 6px",
-    borderRadius: 6,
-    border: "1px solid #2481cc33",
-    background: "#2481cc08",
-    color: "#e4e4e7",
-    fontSize: 13,
+    width: 65,
+    padding: "8px 10px",
+    borderRadius: 8,
+    border: "2px solid #10b981",
+    background: "#f5f5f5",
+    color: "#000",
+    fontSize: 15,
+    fontWeight: 700,
     fontFamily: "monospace",
     textAlign: "right" as const,
   },
   removeBtn: {
     background: "none",
     border: "none",
-    color: "#555",
-    fontSize: 13,
+    color: "#000",
+    fontSize: 18,
     cursor: "pointer",
-    padding: "2px 4px",
+    padding: "4px 6px",
   },
   submitBtn: {
     width: "100%",
-    marginTop: 14,
-    padding: "14px 0",
+    marginTop: 16,
+    padding: "16px 0",
     borderRadius: 12,
     border: "none",
-    background: "#2481cc",
+    background: "#10b981",
     color: "#fff",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
   },
   clearBtn: {
     width: "100%",
-    marginTop: 6,
-    padding: "10px 0",
+    marginTop: 8,
+    padding: "12px 0",
     borderRadius: 10,
-    border: "1px solid #ffffff10",
-    background: "transparent",
-    color: "#666",
-    fontSize: 13,
+    border: "1px solid #f6465d44",
+    background: "#f6465d15",
+    color: "#f6465d",
+    fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
   },

@@ -56,6 +56,7 @@ async function main() {
       { command: "trade", description: "Submit a market trade" },
       { command: "limit", description: "Set a limit order" },
       { command: "strategy", description: "Auto-invest portfolios" },
+      { command: "launch", description: "Launch a new startup token" },
     ],
   });
   console.log(cmds.ok ? "  Commands set" : "  Commands failed", cmds);

@@ -22,6 +22,7 @@ bot.start((ctx) => {
       `/trade     — Submit a market trade\n` +
       `/limit     — Set a limit order\n` +
       `/strategy  — Auto-invest with risk-tiered portfolios\n` +
+      `/launch    — Launch a new startup token\n` +
       `\n` +
       `Tap <b>Open App</b> below to view your profile.`,
     {
@@ -45,6 +46,10 @@ bot.start((ctx) => {
             {
               text: "💼 Strategy",
               callback_data: "strategy_menu",
+            },
+            {
+              text: "🚀 Launch",
+              web_app: { url: `${appUrl}/launch` },
             },
           ],
         ],
@@ -134,6 +139,28 @@ bot.command("strategy", (ctx) => {
             },
             { text: "⚖️ Balanced", callback_data: "strat_balanced" },
             { text: "🚀 Aggressive", callback_data: "strat_aggressive" },
+          ],
+        ],
+      },
+    }
+  );
+});
+
+// ── /launch ──────────────────────────────────────────────
+bot.command("launch", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  ctx.replyWithHTML(
+    `<b>🚀 Launch Your Startup</b>\n\n` +
+      `Create a startup idea that's instantly tradeable on a bonding curve.\n` +
+      `Set a name, ticker, logo, and optionally be the first to invest.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "Launch New Idea",
+              web_app: { url: `${appUrl}/launch` },
+            },
           ],
         ],
       },
@@ -295,6 +322,29 @@ bot.on("web_app_data", (ctx) => {
             `<i>Order will execute when price reaches trigger.</i>`
         );
       }
+      return;
+    }
+
+    // Startup launch
+    if (data.type === "launch_startup") {
+      const purchaseInfo = data.initialPurchase > 0
+        ? `\n<code>Initial buy  $${data.initialPurchase}</code>`
+        : "";
+      const descInfo = data.description
+        ? `\n<i>${data.description}</i>\n`
+        : "";
+      ctx.replyWithHTML(
+        `<b>🚀 Startup Launched!</b>\n` +
+          `\n` +
+          `<b>${data.name}</b> ($${data.symbol})\n` +
+          descInfo +
+          `\n` +
+          `<code>Status       Live on bonding curve</code>\n` +
+          `<code>Price        $0.001</code>` +
+          purchaseInfo +
+          `\n\n` +
+          `<i>Your token is now tradeable. Share it to get others investing!</i>`
+      );
       return;
     }
 

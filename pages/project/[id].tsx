@@ -105,8 +105,8 @@ export default function Project() {
           rightPriceScale: {
             borderColor: 'rgba(255, 255, 255, 0.1)',
             scaleMargins: {
-              top: 0.1,
-              bottom: 0.1,
+              top: 0.25,
+              bottom: 0.25,
             },
           },
           timeScale: {
@@ -141,25 +141,24 @@ export default function Project() {
           },
         });
 
-        // Convert trades to chart data - sort by timestamp
-        // Calculate market cap (price * 1,000,000,000 total supply)
-        const chartData = trades
-          .map((trade) => ({
-            time: parseInt(trade.timestamp) as any,
-            value: parseFloat(trade.priceUsd) * 1000000000,
-          }))
+        // Build data from trades (market cap = priceUsd * 1B)
+        // De-duplicate timestamps to avoid chart issues
+        const deduped = new Map<number, number>();
+        for (const trade of trades) {
+          const t = Number(trade.timestamp);
+          const v = Number(trade.priceUsd) * 1_000_000_000;
+          if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
+          deduped.set(t, v);
+        }
+
+        const chartData = Array.from(deduped.entries())
+          .map(([time, value]) => ({ time: time as any, value }))
           .sort((a, b) => a.time - b.time);
 
         areaSeries.setData(chartData);
 
-        // Set time range to show from creation to now
-        const createdAt = parseInt(project.createdAt);
-        const now = Math.floor(Date.now() / 1000);
-
-        chart.timeScale().setVisibleRange({
-          from: createdAt as any,
-          to: now as any,
-        });
+        // Fit to the actual data window
+        chart.timeScale().fitContent();
 
         const handleResize = () => {
           if (chartContainerRef.current && chart) {
@@ -261,34 +260,44 @@ export default function Project() {
 
   const fetchTrades = async (curveId: string) => {
     try {
-      const response = await fetch('https://api.goldsky.com/api/public/project_cmjjrebt3mxpt01rm9yi04vqq/subgraphs/pump-charts/v2/gn', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `query TradesForCurve($curveId: ID!, $first: Int!) {
-            trades(first: $first, orderBy: timestamp, orderDirection: desc, where: { curve: $curveId }) {
-              id
-              timestamp
-              txHash
-              trader
-              side
-              amountEth
-              amountToken
-              priceEth
-              priceUsd
-            }
-          }`,
-          variables: { curveId, first: 50 }
-        })
-      });
+      const pageSize = 1000;
+      const maxPages = 10; // 10k trades max; increase if needed
+      let allTrades: Trade[] = [];
 
-      const data = await response.json();
+      for (let page = 0; page < maxPages; page++) {
+        const response = await fetch('https://api.goldsky.com/api/public/project_cmjjrebt3mxpt01rm9yi04vqq/subgraphs/pump-charts/v2/gn', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: `query TradesForCurve($curveId: ID!, $first: Int!, $skip: Int!) {
+              trades(first: $first, skip: $skip, orderBy: timestamp, orderDirection: desc, where: { curve: $curveId }) {
+                id
+                timestamp
+                txHash
+                trader
+                side
+                amountEth
+                amountToken
+                priceEth
+                priceUsd
+              }
+            }`,
+            variables: { curveId, first: pageSize, skip: page * pageSize }
+          })
+        });
 
-      if (data.data?.trades) {
-        setTrades(data.data.trades);
+        const data = await response.json();
+        const chunk: Trade[] = data.data?.trades ?? [];
+
+        allTrades = allTrades.concat(chunk);
+
+        // If we got fewer trades than the page size, we've reached the end
+        if (chunk.length < pageSize) break;
       }
+
+      setTrades(allTrades);
     } catch (error) {
       console.error('Error fetching trades:', error);
     }

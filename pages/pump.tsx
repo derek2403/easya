@@ -64,70 +64,43 @@ export default function Pump() {
 
   const fetchCoins = async () => {
     try {
-      const response = await fetch('https://api.goldsky.com/api/public/project_cmjjrebt3mxpt01rm9yi04vqq/subgraphs/pump-charts/v2/gn', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `query LatestCurves($first: Int!) {
-            curves(first: $first, orderBy: createdAt, orderDirection: desc) {
-              id
-              createdAt
-              token
-              name
-              symbol
-              uri
-              creator
-              graduated
-              lastPriceUsd
-              lastPriceEth
-              totalVolumeEth
-              tradeCount
-              lastTradeAt
-            }
-          }`,
-          variables: { first: 50 }
-        })
-      });
+      const response = await fetch('/api/tokens');
+      const curves: Curve[] = await response.json();
 
-      const data = await response.json();
+      if (Array.isArray(curves)) {
+        const FEATURED_ID = '0x51eb656a0dd118808574c4954926c66929f8fe33';
 
-      if (data.data?.curves) {
-        const processedCoins = await Promise.all(
-          data.data.curves.map(async (curve: Curve) => {
-            const marketCap = parseFloat(curve.lastPriceUsd) * 1000000 || Math.random() * 10000;
-            const priceChange = (Math.random() - 0.5) * 100;
-            const progress = Math.min(100, Math.random() * 100);
-
-            let imageUrl = '';
-            let description = 'No description';
-
-            if (curve.uri) {
-              const metadata = await fetchMetadata(curve.uri);
-              if (metadata) {
-                if (metadata.image) {
-                  imageUrl = convertIpfsToHttp(metadata.image);
-                }
-                if (metadata.description) {
-                  description = metadata.description;
-                }
-              }
-            }
-
-            return {
-              ...curve,
-              marketCap,
-              priceChange,
-              description,
-              image: imageUrl,
-              timeAgo: getTimeAgo(curve.createdAt),
-              progress
-            };
-          })
-        );
+        const processedCoins: CoinData[] = curves.map((curve) => ({
+          ...curve,
+          marketCap: parseFloat(curve.lastPriceUsd) * 1000000 || Math.random() * 10000,
+          priceChange: (Math.random() - 0.5) * 100,
+          description: '',
+          image: '',
+          timeAgo: getTimeAgo(curve.createdAt),
+          progress: Math.min(100, Math.random() * 100),
+        }));
 
         setCoins(processedCoins);
+
+        // Only fetch IPFS metadata for the featured token (avoids 50+ slow IPFS calls)
+        const featured = curves.find((c) => c.id === FEATURED_ID);
+        if (featured?.uri) {
+          fetchMetadata(featured.uri).then((metadata) => {
+            if (metadata) {
+              setCoins((prev) =>
+                prev.map((c) =>
+                  c.id === FEATURED_ID
+                    ? {
+                        ...c,
+                        image: metadata.image ? convertIpfsToHttp(metadata.image) : '',
+                        description: metadata.description || '',
+                      }
+                    : c
+                )
+              );
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('Error fetching coins:', error);
@@ -369,7 +342,7 @@ export default function Pump() {
                             {coin.symbol}
                           </div>
                           <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground min-w-0 overflow-hidden">
-                            <span className="text-primary shrink-0">👤</span>
+                            <span className="text-primary shrink-0">&#128100;</span>
                             <span className="font-mono truncate">{coin.creator.slice(2, 8)}</span>
                             <span className="shrink-0 whitespace-nowrap">{coin.timeAgo}</span>
                           </div>
@@ -393,7 +366,7 @@ export default function Pump() {
                             <span className="inline-flex">
                               <span className={`text-xs sm:text-sm font-semibold shrink-0 whitespace-nowrap ${coin.priceChange >= 0 ? 'text-primary' : 'text-red-500'
                                 }`}>
-                                {coin.priceChange >= 0 ? '↑' : '↓'} {Math.abs(coin.priceChange).toFixed(2)}%
+                                {coin.priceChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(coin.priceChange).toFixed(2)}%
                               </span>
                             </span>
                           </div>

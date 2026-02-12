@@ -52,7 +52,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({});
-  const [pendingOrders, setPendingOrders] = useState<LimitOrder[]>([]);
+  const pendingOrders: LimitOrder[] = [];
 
   const getUserId = (): number => {
     if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
@@ -72,10 +72,9 @@ export default function ProfilePage() {
     setLoading(true);
     try {
       const userId = getUserId();
-      const [portfolioRes, pricesRes, ordersRes] = await Promise.all([
+      const [portfolioRes, pricesRes] = await Promise.all([
         fetch(`/api/portfolio?userId=${userId}`),
         fetch("/api/strategy?tier=conservative"),
-        fetch("/api/limit-order"),
       ]);
 
       const portfolioData = await portfolioRes.json();
@@ -88,15 +87,6 @@ export default function ProfilePage() {
           priceMap[token.id] = parseFloat(token.lastPriceUsd);
         }
         setPrices(priceMap);
-      }
-
-      const ordersData = await ordersRes.json();
-      if (Array.isArray(ordersData)) {
-        setPendingOrders(
-          ordersData.filter(
-            (o: LimitOrder) => o.status === "pending" && o.orderType === "entry"
-          )
-        );
       }
     } catch {
       // fallback
@@ -476,72 +466,6 @@ export default function ProfilePage() {
                 </div>
               );
             })
-          )}
-
-          {/* Pending Orders */}
-          {pendingOrders.length > 0 && (
-            <>
-              <h3 style={s.sectionTitle}>
-                Open Orders{" "}
-                <span style={{ color: "#555" }}>
-                  ({pendingOrders.length})
-                </span>
-              </h3>
-              {pendingOrders.map((order) => (
-                <div key={order.id} style={s.card}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 4,
-                          background: "#f0b90b",
-                        }}
-                      />
-                      <div>
-                        <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
-                          {order.side.toUpperCase()} {order.symbol}
-                        </p>
-                        <p style={{ fontSize: 11, color: "#666", margin: "3px 0 0" }}>
-                          Trigger: ${parseFloat(order.triggerPrice) < 0.0001
-                            ? parseFloat(order.triggerPrice).toExponential(2)
-                            : parseFloat(order.triggerPrice).toPrecision(4)}
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          margin: 0,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        ${parseFloat(order.amount).toFixed(2)}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: "#f0b90b",
-                          margin: "2px 0 0",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Pending
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>
           )}
 
           {/* Recent Activity */}

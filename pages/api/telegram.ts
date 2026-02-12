@@ -12,16 +12,16 @@ const awaitingKey = new Set<number>();
 bot.start((ctx) => {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   ctx.replyWithHTML(
-    `<b>Welcome to EasyA Trading Bot</b>\n` +
+    `<b>Welcome to RobinBot</b>\n` +
       `\n` +
       `Your AI-powered crypto assistant for bonding curve tokens.\n` +
       `\n` +
       `<b>What I can do:</b>\n` +
       `\n` +
       `/profile   — View wallet & portfolio\n` +
-      `/tokens    — Browse tokens with AI risk scores\n` +
+      `/pump      — Browse live coins\n` +
+      `/tokens    — Analyze tokens with AI risk scores\n` +
       `/trade     — Submit a market trade\n` +
-      `/limit     — Set a limit order\n` +
       `/strategy  — Auto-invest with risk-tiered portfolios\n` +
       `/launch    — Launch a new startup token\n` +
       `\n` +
@@ -41,13 +41,17 @@ bot.start((ctx) => {
               web_app: { url: `${appUrl}/profile` },
             },
             {
-              text: "📊 Tokens",
-              web_app: { url: `${appUrl}/analyze` },
+              text: "🔥 Pump",
+              web_app: { url: `${appUrl}/pump` },
             },
           ],
           [
             {
-              text: "📈 Trade",
+              text: "📊 Analyze",
+              web_app: { url: `${appUrl}/analyze` },
+            },
+            {
+              text: "📈 Limit Order",
               web_app: { url: `${appUrl}/limit-order` },
             },
           ],
@@ -59,6 +63,26 @@ bot.start((ctx) => {
             {
               text: "🚀 Launch",
               web_app: { url: `${appUrl}/launch` },
+            },
+          ],
+        ],
+      },
+    }
+  );
+});
+
+// ── /pump ────────────────────────────────────────────────
+bot.command("pump", (ctx) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  ctx.replyWithHTML(
+    `<b>🔥 Live Coins</b>\n\nBrowse the latest bonding curve tokens.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "Open Live Coins",
+              web_app: { url: `${appUrl}/pump` },
             },
           ],
         ],

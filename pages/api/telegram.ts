@@ -46,9 +46,8 @@ bot.start((ctx) => {
             },
           ],
           [
-            { text: "📈 Trade", web_app: { url: `${appUrl}/trade` } },
             {
-              text: "⏳ Limit Order",
+              text: "📈 Trade",
               web_app: { url: `${appUrl}/limit-order` },
             },
           ],

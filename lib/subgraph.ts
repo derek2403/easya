@@ -9,6 +9,13 @@ async function fetchWithRetry(
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, options);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(`Expected JSON but got ${contentType}`);
+      }
       return res;
     } catch (err) {
       if (i === retries - 1) throw err;

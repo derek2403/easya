@@ -2,7 +2,20 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import Script from "next/script";
-import Image from "next/image";
+
+const SUBGRAPH_URL =
+  "https://api.goldsky.com/api/public/project_cmjjrebt3mxpt01rm9yi04vqq/subgraphs/pump-charts/v2/gn";
+
+interface TokenItem {
+  id: string;
+  name: string;
+  symbol: string;
+  lastPriceUsd: string;
+  totalVolumeEth: string;
+  tradeCount: string;
+  graduated: boolean;
+  createdAt: string;
+}
 
 interface RiskFactor {
   name: string;
@@ -25,9 +38,6 @@ interface AnalysisData {
     totalVolumeEth: string;
     tradeCount: string;
     lastTradeAt: string | null;
-    uri: string;
-    image: string;
-    description: string;
   };
   risk: {
     score: number;
@@ -53,8 +63,14 @@ const RISK_COLORS = {
 export default function AnalyzePage() {
   const router = useRouter();
   const { id } = router.query;
+
+  // Token list state
+  const [tokens, setTokens] = useState<TokenItem[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+
+  // Analysis state
   const [data, setData] = useState<AnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -63,48 +79,196 @@ export default function AnalyzePage() {
     }
   }, []);
 
+  // Fetch token list on mount
   useEffect(() => {
-    if (!id) return;
+    fetch(SUBGRAPH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `query { curves(first: 50, orderBy: createdAt, orderDirection: desc) {
+          id name symbol lastPriceUsd totalVolumeEth tradeCount graduated createdAt
+        }}`,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        if (json.data?.curves) {
+          setTokens(json.data.curves);
+        }
+        setTokensLoading(false);
+      })
+      .catch(() => {
+        setTokensLoading(false);
+      });
+  }, []);
+
+  // Fetch analysis when id changes
+  useEffect(() => {
+    if (!id) {
+      setData(null);
+      setAnalyzing(false);
+      setError("");
+      return;
+    }
+
+    setAnalyzing(true);
+    setError("");
+    setData(null);
+
     fetch(`/api/analyze?id=${id}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((json) => {
         if (json.error) setError(json.error);
         else setData(json);
-        setLoading(false);
+        setAnalyzing(false);
       })
       .catch(() => {
         setError("Failed to load analysis");
-        setLoading(false);
+        setAnalyzing(false);
       });
   }, [id]);
 
   const formatAge = useCallback((createdAt: string) => {
-    const now = Date.now();
-    const created = parseInt(createdAt) * 1000;
-    const diff = Math.floor((now - created) / 1000);
-
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
+    const seconds = Date.now() / 1000 - parseInt(createdAt);
+    const hours = seconds / 3600;
+    if (hours < 1) return `${Math.round(hours * 60)}m`;
+    if (hours < 24) return `${Math.round(hours)}h`;
+    return `${Math.round(hours / 24)}d`;
   }, []);
 
   const formatNumber = useCallback((num: string | number): string => {
     const n = typeof num === "string" ? parseFloat(num) : num;
     if (isNaN(n)) return "0";
     if (n === 0) return "0";
-
-    if (n < 0.000001) {
-      const str = n.toFixed(20);
-      return str.replace(/\.?0+$/, "");
-    }
-
+    if (n < 0.000001) return n.toFixed(20).replace(/\.?0+$/, "");
     if (n < 1) return n.toFixed(10).replace(/\.?0+$/, "");
     return n.toFixed(8).replace(/\.?0+$/, "");
   }, []);
 
   const color = data ? RISK_COLORS[data.risk.level] : "#888";
 
+  // ── Token List View (no id selected) ──
+  if (!id) {
+    return (
+      <>
+        <Head>
+          <title>Token Analysis</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </Head>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+        <div
+          style={{
+            minHeight: "100vh",
+            background: "var(--tg-theme-bg-color, #0f1117)",
+            color: "var(--tg-theme-text-color, #e4e4e7)",
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          }}
+        >
+          <div style={{ maxWidth: 480, margin: "0 auto", padding: "16px" }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>
+              Select a token to analyze
+            </h1>
+
+            {tokensLoading && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 0" }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    border: "3px solid #333",
+                    borderTopColor: "#2481cc",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                  }}
+                />
+                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+              </div>
+            )}
+
+            {!tokensLoading && tokens.length === 0 && (
+              <p style={{ color: "#888", textAlign: "center", padding: "40px 0" }}>
+                No tokens found.
+              </p>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {tokens.map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => router.push(`/analyze?id=${t.id}`, undefined, { shallow: true })}
+                  style={{
+                    background: "var(--tg-theme-secondary-bg-color, #1a1b23)",
+                    borderRadius: 12,
+                    padding: "12px 14px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#252630")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "var(--tg-theme-secondary-bg-color, #1a1b23)")}
+                >
+                  {/* Symbol badge */}
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: "linear-gradient(135deg, #2481cc33, #2481cc11)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#2481cc",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t.symbol.slice(0, 3)}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.name}
+                      </span>
+                      <span style={{ fontSize: 11, color: "#666" }}>${t.symbol}</span>
+                      {t.graduated && (
+                        <span style={{ fontSize: 9, color: "#0ecb81", fontWeight: 600 }}>GRAD</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                      {parseInt(t.tradeCount)} trades · {parseFloat(t.totalVolumeEth).toFixed(3)} ETH · {formatAge(t.createdAt)}
+                    </div>
+                  </div>
+
+                  {/* Price */}
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#0ecb81" }}>
+                      ${formatNumber(t.lastPriceUsd)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Analysis View (id selected) ──
   return (
     <>
       <Head>
@@ -121,21 +285,38 @@ export default function AnalyzePage() {
       <div
         style={{
           minHeight: "100vh",
-          background: "var(--tg-theme-bg-color, #0f1117)",
-          color: "var(--tg-theme-text-color, #e4e4e7)",
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          background: "var(--tg-theme-bg-color, #fff)",
+          color: "var(--tg-theme-text-color, #000)",
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         }}
       >
+        {/* Back button */}
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 16px 0" }}>
+          <button
+            onClick={() => router.push("/analyze", undefined, { shallow: true })}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#2481cc",
+              fontSize: 14,
+              cursor: "pointer",
+              padding: "4px 0",
+              fontFamily: "inherit",
+            }}
+          >
+            &larr; Back to tokens
+          </button>
+        </div>
+
         {/* Loading */}
-        {loading && (
+        {analyzing && (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              height: "100vh",
+              height: "70vh",
               gap: 16,
             }}
           >
@@ -163,7 +344,7 @@ export default function AnalyzePage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              height: "100vh",
+              height: "70vh",
             }}
           >
             <p style={{ color: "#f6465d", fontSize: 16 }}>{error}</p>
@@ -189,13 +370,13 @@ export default function AnalyzePage() {
                   alignItems: "stretch",
                 }}
               >
-                {/* Token Image */}
+                {/* Token Symbol Badge */}
                 <div
                   style={{
                     width: 95,
                     height: 95,
                     borderRadius: 14,
-                    background: data.curve.image ? "#000" : `linear-gradient(135deg, ${color}33, ${color}11)`,
+                    background: `linear-gradient(135deg, ${color}33, ${color}11)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -203,27 +384,9 @@ export default function AnalyzePage() {
                     fontWeight: 700,
                     color,
                     flexShrink: 0,
-                    overflow: "hidden",
-                    position: "relative",
                   }}
                 >
-                  {data.curve.image ? (
-                    <img
-                      alt={data.curve.name}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                      src={data.curve.image}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.parentElement!.innerHTML = data.curve.symbol.slice(0, 2);
-                      }}
-                    />
-                  ) : (
-                    data.curve.symbol.slice(0, 2)
-                  )}
+                  {data.curve.symbol.slice(0, 2)}
                 </div>
 
                 {/* Token Info */}
@@ -251,7 +414,7 @@ export default function AnalyzePage() {
                       }}
                     >
                       <span style={{ fontFamily: "monospace", color: "#888" }}>{data.curve.symbol}</span>
-                      <span style={{ color: "#444" }}>•</span>
+                      <span style={{ color: "#444" }}>&bull;</span>
                       <span style={{ fontFamily: "monospace", color: "#888" }}>
                         {data.curve.token.slice(0, 6)}...{data.curve.token.slice(-4)}
                       </span>
@@ -268,11 +431,11 @@ export default function AnalyzePage() {
                       }}
                     >
                       <span>by: <span style={{ fontFamily: "monospace", color: "#888" }}>{data.curve.creator.slice(-6)}</span></span>
-                      <span style={{ color: "#444" }}>•</span>
+                      <span style={{ color: "#444" }}>&bull;</span>
                       <span>{formatAge(data.curve.createdAt)}</span>
                       {data.curve.graduated && (
                         <>
-                          <span style={{ color: "#444" }}>•</span>
+                          <span style={{ color: "#444" }}>&bull;</span>
                           <span style={{ color: "#0ecb81", fontSize: 10, fontWeight: 600 }}>GRADUATED</span>
                         </>
                       )}
@@ -510,27 +673,9 @@ export default function AnalyzePage() {
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    <path
-                      d="M12 2L2 7L12 12L22 7L12 2Z"
-                      stroke="#000"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M2 17L12 22L22 17"
-                      stroke="#000"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M2 12L12 17L22 12"
-                      stroke="#000"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M2 17L12 22L22 17" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M2 12L12 17L22 12" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
                 <h3
@@ -540,7 +685,7 @@ export default function AnalyzePage() {
                     margin: 0,
                     textTransform: "uppercase",
                     letterSpacing: 0.8,
-                    color: "#000",
+                    color: "#888",
                   }}
                 >
                   AI Analysis
@@ -551,7 +696,6 @@ export default function AnalyzePage() {
                   if (!line.trim()) return null;
 
                   const trimmedLine = line.trim();
-                  const upperLine = trimmedLine.toUpperCase();
 
                   // Check if this is a Verdict line
                   const isVerdictLine = trimmedLine.startsWith("Verdict") || /^3\.\s*Verdict/i.test(trimmedLine);
@@ -566,7 +710,7 @@ export default function AnalyzePage() {
                     if (parts.length >= 2) {
                       const label = parts[0];
                       const verdict = parts.slice(1).join(":").trim();
-                      let verdictColor = "#000";
+                      let verdictColor = "#e4e4e7";
 
                       const upperVerdict = verdict.toUpperCase();
                       if (upperVerdict.includes("SAFE")) {
@@ -576,14 +720,7 @@ export default function AnalyzePage() {
                       }
 
                       return (
-                        <p
-                          key={i}
-                          style={{
-                            margin: "6px 0",
-                            fontWeight: 700,
-                            color: "#000",
-                          }}
-                        >
+                        <p key={i} style={{ margin: "6px 0", fontWeight: 700 }}>
                           {label}: <span style={{ color: verdictColor }}>{verdict}</span>
                         </p>
                       );
@@ -596,7 +733,7 @@ export default function AnalyzePage() {
                       style={{
                         margin: "6px 0",
                         fontWeight: isBold ? 700 : 400,
-                        color: isBold ? "#000" : "#333",
+                        color: isBold ? "#e4e4e7" : "#aaa",
                       }}
                     >
                       {cleaned}

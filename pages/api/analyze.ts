@@ -5,35 +5,6 @@ import { computeRiskScore } from "@/lib/risk";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Helper function to convert IPFS URLs to HTTP URLs
-const convertIpfsToHttp = (ipfsUrl: string): string => {
-  if (!ipfsUrl) return "";
-  if (ipfsUrl.startsWith("ipfs://")) {
-    const hash = ipfsUrl.replace("ipfs://", "");
-    return `https://olive-defensive-giraffe-83.mypinata.cloud/ipfs/${hash}`;
-  }
-  return ipfsUrl;
-};
-
-// Helper function to fetch metadata from URI
-const fetchMetadata = async (
-  uri: string
-): Promise<{ image: string; description?: string } | null> => {
-  try {
-    const metadataUrl = convertIpfsToHttp(uri);
-    const response = await fetch(metadataUrl);
-    if (!response.ok) return null;
-    const metadata = await response.json();
-    return {
-      image: metadata.image || "",
-      description: metadata.description || metadata.name || "",
-    };
-  } catch (error) {
-    console.error("Error fetching metadata:", error);
-    return null;
-  }
-};
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -57,26 +28,10 @@ export default async function handler(
 
     const risk = computeRiskScore(curve);
 
-    // Fetch metadata to get image and description
-    let imageUrl = "";
-    let description = "No description";
-
-    if (curve.uri) {
-      const metadata = await fetchMetadata(curve.uri);
-      if (metadata) {
-        if (metadata.image) {
-          imageUrl = convertIpfsToHttp(metadata.image);
-        }
-        if (metadata.description) {
-          description = metadata.description;
-        }
-      }
-    }
-
     // Build trade summary for AI
     const uniqueTraders = new Set(trades.map((t) => t.trader)).size;
-    const buys = trades.filter((t) => t.side === "BUY").length;
-    const sells = trades.filter((t) => t.side === "SELL").length;
+    const buys = trades.filter((t) => t.side === "buy").length;
+    const sells = trades.filter((t) => t.side === "sell").length;
     const totalTradeVolume = trades.reduce(
       (sum, t) => sum + parseFloat(t.amountEth),
       0
@@ -138,9 +93,6 @@ Provide:
         totalVolumeEth: curve.totalVolumeEth,
         tradeCount: curve.tradeCount,
         lastTradeAt: curve.lastTradeAt,
-        uri: curve.uri,
-        image: imageUrl,
-        description: description,
       },
       risk,
       tradeSummary: {

@@ -2,8 +2,9 @@
 
 AI-powered crypto trading platform built as a Telegram Mini App on Base. Browse bonding curve tokens with real-time risk analysis, execute trades with multi-level limit orders, auto-invest through strategy portfolios, and launch your own token — all without leaving Telegram.
 
-## 🎥 Demo Video
+## 🎥 Demo Video & Slides
 Link: https://drive.google.com/file/d/1PioPTpPNKiFDpoxmY3Q51LHNeVSo17NW/view?usp=sharing
+https://www.canva.com/design/DAHBD3RbU7Q/_mepNdPbsL_YpMNf3U9odA/edit?utm_content=DAHBD3RbU7Q&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
 
 ![Screenshot 1](public/image1.png) ![Screenshot 2](public/image2.png) ![Screenshot 3](public/image3.png) ![Screenshot 4](public/image4.png) ![Screenshot 5](public/image5.png)
 
